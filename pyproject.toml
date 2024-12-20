@@ -1,0 +1,21 @@
+[project]
+name = "jovi_glsl"
+description = "Integrates GLSL shader support."
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = [
+    "aenum>=3.1.15,<4",
+    "glfw>=2.8.0",
+    "loguru>=0.7.2",
+    "numpy>=1.26.4",
+    "opencv-contrib-python>=4.10.0.84",
+    "PyOpenGL>=3.1.7"
+]
+
+[project.urls]
+Repository = "https://github.com/Amorano/JOVI_GLSL"
+
+[tool.comfy]
+PublisherId = "amorano"
+DisplayName = "JOVI_GLSL"
+Icon = ""

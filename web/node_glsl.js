@@ -6,7 +6,7 @@
 
 import { api } from "../../scripts/api.js";
 import { app } from "../../scripts/app.js";
-import { flashBackgroundColor, widgetHide, widgetSizeModeHook  } from './util_jov.js';
+import { widgetFind, flashBackgroundColor } from './util_jov.js';
 
 const _id = "GLSL (JOV_GL) 🍩";
 const EVENT_JOVI_GLSL_ERROR = "jovi-glsl-error";
@@ -20,15 +20,13 @@ app.registerExtension({
             return;
         }
 
-        widgetSizeModeHook(nodeType, true);
-
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = async function () {
             const me = onNodeCreated?.apply(this);
             const self = this;
-            const widget_time = this.widgets.find(w => w.name == 'TIME');
-            const widget_vertex = this.widgets.find(w => w.name == 'VERTEX');
-            const widget_fragment = this.widgets.find(w => w.name == 'FRAGMENT');
+            const widget_time = widgetFind(this.widgets, 'TIME');
+            const widget_vertex = widgetFind(this.widgets, 'VERTEX');
+            const widget_fragment = widgetFind(this.widgets, 'FRAGMENT');
             widget_vertex.options.menu = false;
             widget_fragment.options.menu = false;
 

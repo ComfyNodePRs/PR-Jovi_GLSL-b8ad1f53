@@ -1,6 +1,6 @@
 // name: POSTERIZE
 // desc: Reduce the pixel color data range
-// category: FILTER
+// category: COLOR
 
 uniform sampler2D image; //            | RGB(A) image
 uniform int steps;       // 63;1;255;1 | Pixel data range allowed

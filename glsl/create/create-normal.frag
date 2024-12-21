@@ -2,10 +2,10 @@
 // desc: Convert input into a Normal map
 // category: CREATE
 
-uniform sampler2D image; //        | Input image to convert into a normal map
-uniform float scalar;    // 1.00;0 | Intensity of base normal
-uniform float detail;    // 1.00;0 | Intensity of detail normal
-uniform bool flip;       //        | Reverse the Normal direction
+uniform sampler2D image; //         | Input image to convert into a normal map
+uniform float scalar;    // 1.00; 0 | Intensity of base normal
+uniform float detail;    // 1.00; 0 | Intensity of detail normal
+uniform bool flip;       //         | Reverse the Normal direction
 
 const mat3 scharr_x = mat3(
      1.0,    10.0/3.0,  1.0,

@@ -1,6 +1,6 @@
 // name: TRANSFORM
-// desc: Abuse UV space to create repetitions. Maximums are row: width/4; column: height/4
-// category: MODIFY
+// desc: Move, Rotate, Scale and Tile an image
+// category: TRANSFORM
 
 #include .lib/const.lib
 

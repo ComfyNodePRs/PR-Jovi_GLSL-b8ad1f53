@@ -24,8 +24,8 @@ from Jovi_GLSL import GLSL_INTERNAL, GLSL_CUSTOM, JOV_TYPE_IMAGE, ROOT, \
     comfy_message
 
 from Jovi_GLSL.core import IMAGE_SIZE_DEFAULT, IMAGE_SIZE_MAX, IMAGE_SIZE_MIN, \
-    EnumConvertType, EnumInterpolation, EnumScaleMode, \
-    cv2tensor_full, image_convert, image_scalefit, load_file, \
+    EnumConvertType, \
+    cv2tensor_full, image_convert, load_file, \
     parse_param, parse_value, tensor2cv
 
 # ==============================================================================
@@ -209,10 +209,13 @@ class ShaderCache:
         self.program_cache.clear()
 
 class GLSLShader:
+    """
+    """
 
     def __init__(self, vertex:str=None, fragment:str=None, width:int=IMAGE_SIZE_DEFAULT, height:int=IMAGE_SIZE_DEFAULT, fps:int=30) -> None:
         if not glfw.init():
             raise RuntimeError("GLFW did not init")
+
         self.__size: Tuple[int, int] = (max(width, IMAGE_SIZE_MIN), max(height, IMAGE_SIZE_MIN))
         self.__empty_image: np.ndarray = np.zeros((self.__size[1], self.__size[0]), np.uint8)
         self.__program = None
@@ -231,6 +234,8 @@ class GLSLShader:
         self.__bgcolor = (0, 0, 0, 1.)
         self.__textures = {}
         self.__window = None
+        self.__uniform_state = {}
+        self.__texture_hashes = {}
         self.__init_window(vertex, fragment)
 
     def __cleanup(self) -> None:
@@ -477,47 +482,51 @@ class GLSLShader:
         if (val := self.__shaderVar.get('iFrame', -1)) > -1:
             gl.glUniform1i(val, self.frame)
 
-        texture_index = 0
+        texture_index = -1
         for uk, uv in self.__userVar.items():
-            p_type, p_loc, p_value, _ = uv
+            p_type, p_loc, p_value, texture_id = uv
             val = kw.get(uk, p_value)
 
             if p_type == 'sampler2D':
-                if (texture := self.__textures.get(uk, None)) is None:
-                    logger.error(f"texture [{texture_index}] {uk} is None")
-                    texture_index += 1
+                texture_index += 1
+                if texture_id is None:
                     continue
+                    if (texture := self.__textures.get(uk, None)) is None:
+                        logger.error(f"texture [{texture_index}] {uk} is None")
+                        texture_index += 1
+                        continue
 
                 gl.glActiveTexture(gl.GL_TEXTURE0 + texture_index)
-                gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
+                gl.glBindTexture(gl.GL_TEXTURE_2D, texture_id)
 
                 # send in black if nothing in input image
                 if not isinstance(val, (np.ndarray,)):
                     val = self.__empty_image
 
-                # @TODO: could cache this ?
-                val = image_convert(val, 4)
-                val = val[::-1,:]
-                val = val.astype(np.float32) / 255.0
-                val = cv2.resize(val, self.__size, interpolation=cv2.INTER_LINEAR)
-                #
-                gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, self.__size[0], self.__size[1], 0, gl.GL_RGBA, gl.GL_FLOAT, val)
-                gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
-                gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+                current_hash = hash(val.tobytes())
+                if uk not in self.__texture_hashes or self.__texture_hashes[uk] != current_hash:
+                    val = image_convert(val, 4)
+                    val = val[::-1,:]
+                    val = val.astype(np.float32) / 255.0
+                    val = cv2.resize(val, self.__size, interpolation=cv2.INTER_LINEAR)
 
+                    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, self.__size[0], self.__size[1], 0, gl.GL_RGBA, gl.GL_FLOAT, val)
+                    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+                    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+
+                    self.__texture_hashes[uk] = current_hash
+
+                # Set edge wrapping modes
                 for idx, text_wrap in enumerate([gl.GL_TEXTURE_WRAP_S, gl.GL_TEXTURE_WRAP_T]):
-                    match tile_edge[idx]:
-                        case EnumEdgeWrap.WRAP:
-                            gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_REPEAT)
-                        case EnumEdgeWrap.MIRROR:
-                            gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_MIRRORED_REPEAT)
-                        case _:
-                            gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_CLAMP_TO_EDGE)
+                    if tile_edge[idx] == EnumEdgeWrap.WRAP:
+                        gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_REPEAT)
+                    elif tile_edge[idx] == EnumEdgeWrap.MIRROR:
+                        gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_MIRRORED_REPEAT)
+                    else:
+                        gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_CLAMP_TO_EDGE)
 
                 gl.glUniform1i(p_loc, texture_index)
-                texture_index += 1
             elif val:
-                funct = LAMBDA_UNIFORM[p_type]
                 if isinstance(p_value, EnumType):
                     val = p_value[val].value
                 elif isinstance(val, str):
@@ -525,7 +534,11 @@ class GLSLShader:
                 val = parse_value(val, PTYPE[p_type], 0)
                 if not isinstance(val, (list, tuple)):
                     val = [val]
-                funct(p_loc, *val)
+
+                uk = (uk, p_loc)
+                if uk not in self.__uniform_state or self.__uniform_state[uk] != val:
+                    LAMBDA_UNIFORM[p_type](p_loc, *val)
+                    self.__uniform_state[uk] = val
 
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
         gl.glClearColor(*self.__bgcolor)
@@ -589,12 +602,12 @@ class GLSLNodeBase(JOVBaseNode):
     def INPUT_TYPES(cls) -> dict:
         d = super().INPUT_TYPES()
         d["optional"] = {
-            'MODE': (EnumScaleMode._member_names_, {"default": EnumScaleMode.MATTE.name}),
+            #'MODE': (EnumScaleMode._member_names_, {"default": EnumScaleMode.MATTE.name}),
             'WH': ("VEC2INT", {"default": (512, 512), "mij":IMAGE_SIZE_MIN, "label": ['W', 'H']}),
-            'SAMPLE': (EnumInterpolation._member_names_, {"default": EnumInterpolation.LANCZOS4.name}),
+            #'SAMPLE': (EnumInterpolation._member_names_, {"default": EnumInterpolation.LANCZOS4.name}),
             'MATTE': ("VEC4INT", {"default": (0, 0, 0, 255), "rgb": True}),
-            'EDGE_X': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name}),
-            'EDGE_Y': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name}),
+            #'EDGE_X': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name}),
+            #'EDGE_Y': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name}),
         }
         return d
 
@@ -608,17 +621,17 @@ class GLSLNodeBase(JOVBaseNode):
         delta = parse_param(kw, 'TIME', EnumConvertType.FLOAT, 0)[0]
 
         # everybody wang comp tonight
-        mode = parse_param(kw, 'MODE', EnumScaleMode, EnumScaleMode.MATTE.name)[0]
+        #mode = parse_param(kw, 'MODE', EnumScaleMode, EnumScaleMode.MATTE.name)[0]
         wihi = parse_param(kw, 'WH', EnumConvertType.VEC2INT, [(512, 512)], IMAGE_SIZE_MIN)[0]
-        sample = parse_param(kw, 'SAMPLE', EnumInterpolation, EnumInterpolation.LANCZOS4.name)[0]
+        #sample = parse_param(kw, 'SAMPLE', EnumInterpolation, EnumInterpolation.LANCZOS4.name)[0]
         matte = parse_param(kw, 'MATTE', EnumConvertType.VEC4INT, [(0, 0, 0, 255)], 0, 255)[0]
-        edge_x = parse_param(kw, 'EDGE_X', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
-        edge_y = parse_param(kw, 'EDGE_Y', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
-        edge = (edge_x, edge_y)
+        #edge_x = parse_param(kw, 'EDGE_X', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
+        #edge_y = parse_param(kw, 'EDGE_Y', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
+        #edge = (edge_x, edge_y)
 
         try:
-            self.__glsl.vertex = getattr(self, 'VERTEX', kw.pop('PROG_VERT', None))
-            self.__glsl.fragment = getattr(self, 'FRAGMENT', kw.pop('PROG_FRAG', None))
+            self.__glsl.vertex = getattr(self, 'VERTEX', kw.pop('VERTEX', None))
+            self.__glsl.fragment = getattr(self, 'FRAGMENT', kw.pop('FRAGMENT', None))
         except CompileException as e:
             comfy_message(ident, "jovi-glsl-error", {"id": ident, "e": str(e)})
             logger.error(self.NAME)
@@ -628,7 +641,8 @@ class GLSLNodeBase(JOVBaseNode):
         self.__glsl.fps = parse_param(kw, 'FPS', EnumConvertType.INT, 24, 1, 120)[0]
 
         variables = kw.copy()
-        for p in ['MODE', 'WH', 'SAMPLE', 'MATTE', 'BATCH', 'TIME', 'FPS', 'EDGE_X', 'EDGE_Y']:
+        #for p in ['MODE', 'WH', 'SAMPLE', 'MATTE', 'BATCH', 'TIME', 'FPS', 'EDGE_X', 'EDGE_Y']:
+        for p in ['WH', 'MATTE', 'BATCH', 'TIME', 'FPS']:
             variables.pop(p, None)
 
         if batch > 0 or self.__delta != delta:
@@ -638,19 +652,15 @@ class GLSLNodeBase(JOVBaseNode):
         images = []
         vars = {}
         batch = max(1, batch)
-        firstImage = None
-        # check if the input(s) have more than a single entry, get the max...
-        if batch == 1:
-            for k, var in variables.items():
-                if isinstance(var, (torch.Tensor)):
-                    batch = max(batch, var.shape[0])
-                    var = [image_convert(tensor2cv(v), 4) for v in var]
-                    if firstImage is None:
-                        firstImage = var[0]
-                elif isinstance(var, (list, tuple,)):
-                    batch = max(batch, len(var))
 
-                variables[k] = var if isinstance(var, (list, tuple,)) else [var]
+        for k, var in variables.items():
+            if isinstance(var, (torch.Tensor)):
+                print(var.shape)
+                batch = max(batch, var.shape[0])
+                var = [image_convert(tensor2cv(v), 4) for v in var]
+            elif isinstance(var, (list, tuple,)):
+                batch = max(batch, len(var))
+            variables[k] = var if isinstance(var, (list, tuple,)) else [var]
 
         pbar = ProgressBar(batch)
         for idx in range(batch):
@@ -658,14 +668,13 @@ class GLSLNodeBase(JOVBaseNode):
                 vars[k] = val[idx % len(val)]
 
             w, h = wihi
-            if firstImage is not None and mode == EnumScaleMode.MATTE:
-                h, w = firstImage.shape[:2]
-
+            if len(images) > 0: # and mode == EnumScaleMode.MATTE:"
+                h, w = images[0].shape[:2]
             self.__glsl.size = (w, h)
 
-            img = self.__glsl.render(self.__delta, edge, **vars)
-            if mode != EnumScaleMode.MATTE:
-                img = image_scalefit(img, w, h, mode, sample)
+            img = self.__glsl.render(self.__delta, **vars)
+            #if mode != EnumScaleMode.MATTE:
+            #    img = image_scalefit(img, w, h, mode, sample)
             images.append(cv2tensor_full(img, matte))
             self.__delta += step
             comfy_message(ident, "jovi-glsl-time", {"id": ident, "t": self.__delta})
@@ -704,10 +713,6 @@ class GLSLNodeDynamic(GLSLNodeBase):
     def INPUT_TYPES(cls) -> dict:
         original_params = super().INPUT_TYPES()
         opts = original_params.get('optional', {})
-        #opts.update({
-        #    'FRAGMENT': ("JDATABUCKET", {"fragment": cls.FRAGMENT}),
-        #})
-
         opts.update({
             'FRAGMENT': ("STRING", {"default": cls.FRAGMENT}),
         })

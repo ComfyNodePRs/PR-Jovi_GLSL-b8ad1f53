@@ -59,27 +59,6 @@ class EnumConvertType(Enum):
     # MIXLAB LAYER
     LAYER = 8
 
-class EnumInterpolation(Enum):
-    NEAREST = cv2.INTER_NEAREST
-    LINEAR = cv2.INTER_LINEAR
-    CUBIC = cv2.INTER_CUBIC
-    AREA = cv2.INTER_AREA
-    LANCZOS4 = cv2.INTER_LANCZOS4
-    LINEAR_EXACT = cv2.INTER_LINEAR_EXACT
-    NEAREST_EXACT = cv2.INTER_NEAREST_EXACT
-    # INTER_MAX = cv2.INTER_MAX
-    # WARP_FILL_OUTLIERS = cv2.WARP_FILL_OUTLIERS
-    # WARP_INVERSE_MAP = cv2.WARP_INVERSE_MAP
-
-class EnumScaleMode(Enum):
-    # NONE = 0
-    MATTE = 0
-    CROP = 20
-    FIT = 10
-    ASPECT = 30
-    ASPECT_SHORT = 35
-    RESIZE_MATTE = 40
-
 # ==============================================================================
 # === CORE SUPPORT ===
 # ==============================================================================
@@ -498,32 +477,3 @@ def image_matte(image: TYPE_IMAGE, color: TYPE_iRGBA=(0,0,0,255), width: int=Non
     else:
         image = image[y_offset:y_offset + image_height, x_offset:x_offset + image_width, :]
     return matte
-
-def image_scalefit(image: TYPE_IMAGE, width: int, height:int,
-                mode:EnumScaleMode=EnumScaleMode.MATTE,
-                sample:EnumInterpolation=EnumInterpolation.LANCZOS4,
-                matte:TYPE_PIXEL=(0,0,0,0)) -> TYPE_IMAGE:
-
-    match mode:
-        case EnumScaleMode.MATTE | EnumScaleMode.RESIZE_MATTE:
-            image = image_matte(image, matte, width, height)
-
-        case EnumScaleMode.ASPECT:
-            h, w = image.shape[:2]
-            ratio = max(width, height) / max(w, h)
-            image = cv2.resize(image, None, fx=ratio, fy=ratio, interpolation=sample.value)
-
-        case EnumScaleMode.ASPECT_SHORT:
-            h, w = image.shape[:2]
-            ratio = min(width, height) / min(w, h)
-            image = cv2.resize(image, None, fx=ratio, fy=ratio, interpolation=sample.value)
-
-        case EnumScaleMode.CROP:
-            image = image_crop_center(image, width, height)
-
-        case EnumScaleMode.FIT:
-            image = cv2.resize(image, (width, height), interpolation=sample.value)
-
-    if image.ndim == 2:
-        image = np.expand_dims(image, -1)
-    return image

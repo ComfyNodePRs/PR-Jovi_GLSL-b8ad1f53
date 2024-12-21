@@ -70,6 +70,7 @@ class JOVBaseNode:
     def INPUT_TYPES(cls, prompt:bool=False, extra_png:bool=False, dynprompt:bool=False) -> dict:
         data = {
             "required": {},
+            "optional": {},
             "outputs": {
                 0: ("IMAGE", {"tooltips":"Full channel [RGBA] image. If there is an alpha, the image will be masked out with it when using this output."}),
                 1: ("IMAGE", {"tooltips":"Three channel [RGB] image. There will be no alpha."}),

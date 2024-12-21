@@ -1,6 +1,7 @@
 // name: NORMAL
 // desc: Convert input into a Normal map
 // category: CREATE
+// control: wh,
 
 uniform sampler2D image; //         | Input image to convert into a normal map
 uniform float scalar;    // 1.00; 0 | Intensity of base normal

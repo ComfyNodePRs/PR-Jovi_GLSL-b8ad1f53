@@ -597,18 +597,24 @@ def load_file_glsl(fname: str) -> str:
 
 class GLSLNodeBase(JOVBaseNode):
     CATEGORY = f"JOVI_GLSL 🔺🟩🔵"
+    CONTROL = []
 
     @classmethod
     def INPUT_TYPES(cls) -> dict:
         d = super().INPUT_TYPES()
-        d["optional"] = {
-            #'MODE': (EnumScaleMode._member_names_, {"default": EnumScaleMode.MATTE.name}),
-            'WH': ("VEC2INT", {"default": (512, 512), "mij":IMAGE_SIZE_MIN, "label": ['W', 'H']}),
-            #'SAMPLE': (EnumInterpolation._member_names_, {"default": EnumInterpolation.LANCZOS4.name}),
-            'MATTE': ("VEC4INT", {"default": (0, 0, 0, 255), "rgb": True}),
-            #'EDGE_X': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name}),
-            #'EDGE_Y': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name}),
-        }
+
+        for ctrl in cls.CONTROL:
+            match ctrl.upper():
+                case "WH":
+                    d["optional"]["WH"] = ("VEC2INT", {"default": (512, 512), "mij":IMAGE_SIZE_MIN, "label": ['W', 'H']})
+                case "MATTE":
+                    d["optional"]["MATTE"] = ("VEC4INT", {"default": (0, 0, 0, 255), "rgb": True})
+        """
+        'MODE': (EnumScaleMode._member_names_, {"default": EnumScaleMode.MATTE.name})
+        'SAMPLE': (EnumInterpolation._member_names_, {"default": EnumInterpolation.LANCZOS4.name})
+        'EDGE_X': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name})
+        'EDGE_Y': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name})
+        """
         return d
 
     def __init__(self, *arg, **kw) -> None:
@@ -641,7 +647,6 @@ class GLSLNodeBase(JOVBaseNode):
         self.__glsl.fps = parse_param(kw, 'FPS', EnumConvertType.INT, 24, 1, 120)[0]
 
         variables = kw.copy()
-        #for p in ['MODE', 'WH', 'SAMPLE', 'MATTE', 'BATCH', 'TIME', 'FPS', 'EDGE_X', 'EDGE_Y']:
         for p in ['WH', 'MATTE', 'BATCH', 'TIME', 'FPS']:
             variables.pop(p, None)
 
@@ -668,13 +673,11 @@ class GLSLNodeBase(JOVBaseNode):
                 vars[k] = val[idx % len(val)]
 
             w, h = wihi
-            if len(images) > 0: # and mode == EnumScaleMode.MATTE:"
+            if len(images) > 0:
                 h, w = images[0].shape[:2]
             self.__glsl.size = (w, h)
 
             img = self.__glsl.render(self.__delta, **vars)
-            #if mode != EnumScaleMode.MATTE:
-            #    img = image_scalefit(img, w, h, mode, sample)
             images.append(cv2tensor_full(img, matte))
             self.__delta += step
             comfy_message(ident, "jovi-glsl-time", {"id": ident, "t": self.__delta})
@@ -707,7 +710,7 @@ Execute custom GLSL (OpenGL Shading Language) fragment shaders to generate image
 
 class GLSLNodeDynamic(GLSLNodeBase):
 
-    PARAM = None
+    PARAM = []
 
     @classmethod
     def INPUT_TYPES(cls) -> dict:
@@ -719,49 +722,49 @@ class GLSLNodeDynamic(GLSLNodeBase):
 
         # parameter list first...
         data = {}
-        if cls.PARAM is not None:
-            # 1., 1., 1.; 0; 1; 0.01; rgb | End of the Range
-            # default, min, max, step, metadata, tooltip
-            for glsl_type, name, default, val_min, val_max, val_step, meta, tooltip in cls.PARAM:
-                typ = PTYPE[glsl_type]
-                params = {"default": None}
+        # if cls.PARAM is not None:
+        # 1., 1., 1.; 0; 1; 0.01; rgb | End of the Range
+        # default, min, max, step, metadata, tooltip
+        for glsl_type, name, default, val_min, val_max, val_step, meta, tooltip in cls.PARAM:
+            typ = PTYPE[glsl_type]
+            params = {"default": None}
 
-                d = None
-                type_name = JOV_TYPE_IMAGE
-                if glsl_type != 'sampler2D':
-                    type_name = typ.name
-                    if default is not None:
-                        if default.startswith('EnumGLSL'):
-                            if (target_enum := globals().get(default.strip(), None)) is not None:
-                                # this be an ENUM....
-                                type_name = target_enum._member_names_
-                                params['default'] = type_name[0]
-                            else:
-                                params['default'] = 0
+            d = None
+            type_name = JOV_TYPE_IMAGE
+            if glsl_type != 'sampler2D':
+                type_name = typ.name
+                if default is not None:
+                    if default.startswith('EnumGLSL'):
+                        if (target_enum := globals().get(default.strip(), None)) is not None:
+                            # this be an ENUM....
+                            type_name = target_enum._member_names_
+                            params['default'] = type_name[0]
                         else:
-                            d = default.split(',')
-                            params['default'] = parse_value(d, typ, 0)
+                            params['default'] = 0
+                    else:
+                        d = default.split(',')
+                        params['default'] = parse_value(d, typ, 0)
 
-                    if val_min is not None:
-                        params['mij'] = parse_value(val_min, EnumConvertType.FLOAT, -sys.maxsize)
+                if val_min is not None:
+                    params['mij'] = parse_value(val_min, EnumConvertType.FLOAT, -sys.maxsize)
 
-                    if val_max is not None:
-                        params['maj'] = parse_value(val_max, EnumConvertType.FLOAT, sys.maxsize)
+                if val_max is not None:
+                    params['maj'] = parse_value(val_max, EnumConvertType.FLOAT, sys.maxsize)
 
-                    if val_step is not None:
-                        d = 1 if typ.name.endswith('INT') else 0.01
-                        params['step'] = parse_value(val_step, EnumConvertType.FLOAT, d)
+                if val_step is not None:
+                    d = 1 if typ.name.endswith('INT') else 0.01
+                    params['step'] = parse_value(val_step, EnumConvertType.FLOAT, d)
 
-                    if meta is not None:
-                        if "rgb" in meta:
-                            if glsl_type.startswith('vec'):
-                                params['linear'] = True
-                            else:
-                                params['rgb'] = True
+                if meta is not None:
+                    if "rgb" in meta:
+                        if glsl_type.startswith('vec'):
+                            params['linear'] = True
+                        else:
+                            params['rgb'] = True
 
-                if tooltip is not None:
-                    params["tooltip"] = tooltip
-                data[name] = (type_name, params,)
+            if tooltip is not None:
+                params["tooltip"] = tooltip
+            data[name] = (type_name, params,)
 
         data.update(opts)
         original_params['optional'] = data
@@ -800,6 +803,7 @@ def import_dynamic() -> Tuple[str,...]:
             "CATEGORY": category.upper(),
             "FRAGMENT": shader,
             "PARAM": meta.get('_', []),
+            "CONTROL": [x.upper().strip() for x in meta.get('control', "").split(",") if len(x) > 0],
             "SORT": sort_order,
         })
 

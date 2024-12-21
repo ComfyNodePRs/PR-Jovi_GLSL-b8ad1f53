@@ -1,7 +1,7 @@
 // name: CONICAL GRADIENT
 // desc: Generate a conical gradient from black to white
 // category: CREATE
-// control: wh, matte,
+// control: wh,
 
 #include .lib/const.lib
 

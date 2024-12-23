@@ -632,11 +632,21 @@ class GLSLNodeDynamic(JOVBaseNode):
                         d = default.split(',')
                         params['default'] = parse_value(d, typ, 0)
 
+                def minmax(mm: str, what: str) -> str:
+                    match glsl_type:
+                        case 'int'|'float':
+                            mm = what
+                    return mm
+
                 if val_min is not None:
-                    params['mij'] = parse_value(val_min, EnumConvertType.FLOAT, -sys.maxsize)
+                    if val_min == "":
+                        val_min = -sys.maxsize
+                    params[minmax('mij', 'min')] = parse_value(val_min, EnumConvertType.FLOAT, -sys.maxsize)
 
                 if val_max is not None:
-                    params['maj'] = parse_value(val_max, EnumConvertType.FLOAT, sys.maxsize)
+                    if val_max == "":
+                        val_max = sys.maxsize
+                    params[minmax('maj', 'max')] = parse_value(val_max, EnumConvertType.FLOAT, sys.maxsize)
 
                 if val_step is not None:
                     d = 1 if typ.name.endswith('INT') else 0.01

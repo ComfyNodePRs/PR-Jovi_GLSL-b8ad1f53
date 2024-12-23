@@ -256,16 +256,16 @@ class GLSLShader:
         self.__last_frame: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
 
         self.__update_framebuffer_size()
+        self.__program = None
 
         if vertex is None:
             logger.debug("Vertex program is empty. Using Default.")
             vertex = PROG_VERTEX
+        self.__source_vertex: int = self.__compile_shader(vertex, gl.GL_VERTEX_SHADER)
 
         if fragment is None:
             logger.debug("Fragment program is empty. Using Default.")
             fragment = PROG_FRAGMENT
-
-        self.__source_vertex: int = self.__compile_shader(vertex, gl.GL_VERTEX_SHADER)
         fragment_full = PROG_HEADER + fragment + PROG_FOOTER
         self.__source_fragment: int = self.__compile_shader(fragment_full, gl.GL_FRAGMENT_SHADER)
 
@@ -667,9 +667,9 @@ class GLSLNodeDynamic(JOVBaseNode):
         original_params['optional'] = data
         return original_params
 
-    @classmethod
-    def IS_CHANGED(cls, **kw) -> float:
-        return float('nan')
+    #@classmethod
+    #def IS_CHANGED(cls, **kw) -> float:
+    #    return float('nan')
 
     def __init__(self, *arg, **kw) -> None:
         super().__init__(*arg, **kw)

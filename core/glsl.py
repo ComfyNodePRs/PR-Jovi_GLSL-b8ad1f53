@@ -217,91 +217,57 @@ class GLSLShader:
             raise RuntimeError("GLFW did not init")
 
         self.__size: Tuple[int, int] = (max(width, IMAGE_SIZE_MIN), max(height, IMAGE_SIZE_MIN))
-        self.__empty_image: np.ndarray = np.zeros((self.__size[1], self.__size[0]), np.uint8)
-        self.__program = None
-        self.__source_vertex: str = None
-        self.__source_fragment: str = None
-        self.__source_vertex_raw: str = None
-        self.__source_fragment_raw: str = None
         self.__runtime: float = 0
         self.__fps: int = min(120, max(1, fps))
         self.__mouse: Tuple[int, int] = (0, 0)
-        self.__last_frame = np.zeros((self.__size[1], self.__size[0]), np.uint8)
         self.__shaderVar = {}
         self.__userVar = {}
-        self.__fbo = None
-        self.__fbo_texture = None
         self.__bgcolor = (0, 0, 0, 1.)
         self.__textures = {}
-        self.__window = None
         self.__uniform_state = {}
         self.__texture_hashes = {}
-        self.__init_window(vertex, fragment)
 
-    def __cleanup(self) -> None:
-        glfw.make_context_current(self.__window)
-        old = [v[3] for v in self.__userVar.values() if v[0] == 'sampler2D']
-        if len(old):
-            gl.glDeleteTextures(old)
-
-        if self.__fbo_texture:
-            gl.glDeleteTextures(1, [self.__fbo_texture])
-
-        if self.__fbo:
-            gl.glDeleteFramebuffers(1, [self.__fbo])
-
-        if self.__program:
-            gl.glDeleteProgram(self.__program)
-
-        if self.__window:
-            glfw.destroy_window(self.__window)
-        logger.debug("cleanup")
-
-    def __init_window(self, vertex:str=None, fragment:str=None, force:bool=False) -> None:
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-        self.__cleanup()
         self.__window = glfw.create_window(self.__size[0], self.__size[1], "hidden", None, None)
         if not self.__window:
             raise RuntimeError("GLFW did not init window")
-
-        self.__init_framebuffer()
-        self.__init_program(vertex, fragment, force)
-        logger.debug("init window")
-
-    def __compile_shader(self, source:str, shader_type:str) -> None:
+        logger.debug("window created")
         glfw.make_context_current(self.__window)
-        shader = gl.glCreateShader(shader_type)
-        gl.glShaderSource(shader, source)
-        gl.glCompileShader(shader)
-        if gl.glGetShaderiv(shader, gl.GL_COMPILE_STATUS) != gl.GL_TRUE:
-            log = gl.glGetShaderInfoLog(shader).decode()
-            logger.error(f"Shader compilation error: {log}")
-            raise CompileException(log)
-        # logger.debug(f"{shader_type} compiled")
-        return shader
 
-    def __init_program(self, vertex:str=None, fragment:str=None, force:bool=False) -> None:
-        vertex = self.__source_vertex_raw if vertex is None else vertex
+        self.__fbo = gl.glGenFramebuffers(1)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
+        logger.debug("framebuffer created")
+
+        self.__fbo_texture = gl.glGenTextures(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.__fbo_texture)
+
+        glfw.set_window_size(self.__window, self.__size[0], self.__size[1])
+        logger.debug("framebuffer texture created")
+
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, self.__size[0], self.__size[1], 0, gl.GL_RGBA, gl.GL_FLOAT, None)
+
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.__fbo_texture, 0)
+        gl.glViewport(0, 0, self.__size[0], self.__size[1])
+        logger.debug("viewport created")
+
+        self.__empty_image: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+        self.__last_frame: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+
+        self.__update_framebuffer_size()
+
         if vertex is None:
             logger.debug("Vertex program is empty. Using Default.")
             vertex = PROG_VERTEX
 
-        if (fragment := self.__source_fragment_raw if fragment is None else fragment) is None:
+        if fragment is None:
             logger.debug("Fragment program is empty. Using Default.")
             fragment = PROG_FRAGMENT
 
-        if not force and vertex == self.__source_vertex_raw and fragment == self.__source_fragment_raw:
-            return
-
-        glfw.make_context_current(self.__window)
-        try:
-            gl.glDeleteProgram(self.__program)
-        except Exception as e:
-            pass
-
-        self.__source_vertex = self.__compile_shader(vertex, gl.GL_VERTEX_SHADER)
+        self.__source_vertex: int = self.__compile_shader(vertex, gl.GL_VERTEX_SHADER)
         fragment_full = PROG_HEADER + fragment + PROG_FOOTER
-        self.__source_fragment = self.__compile_shader(fragment_full, gl.GL_FRAGMENT_SHADER)
+        self.__source_fragment: int = self.__compile_shader(fragment_full, gl.GL_FRAGMENT_SHADER)
 
         self.__program = gl.glCreateProgram()
         gl.glAttachShader(self.__program, self.__source_vertex)
@@ -311,9 +277,6 @@ class GLSLShader:
             log = gl.glGetProgramInfoLog(self.__program).decode()
             logger.error(f"Program linking error: {log}")
             raise RuntimeError(log)
-
-        self.__source_fragment_raw = fragment
-        self.__source_vertex_raw = vertex
 
         gl.glUseProgram(self.__program)
 
@@ -328,7 +291,7 @@ class GLSLShader:
 
         self.__userVar = {}
         # read the fragment and setup the vars....
-        for match in RE_VARIABLE.finditer(self.__source_fragment_raw):
+        for match in RE_VARIABLE.finditer(fragment):
             typ, name, default, *_ = match.groups()
 
             texture = None
@@ -354,32 +317,63 @@ class GLSLShader:
                 texture
             ]
 
-        logger.debug("init vars")
-        logger.debug("init program")
+    def __compile_shader(self, source:str, shader_type:str) -> int:
+        glfw.make_context_current(self.__window)
+        shader = gl.glCreateShader(shader_type)
+        gl.glShaderSource(shader, source)
+        gl.glCompileShader(shader)
+        if gl.glGetShaderiv(shader, gl.GL_COMPILE_STATUS) != gl.GL_TRUE:
+            log = gl.glGetShaderInfoLog(shader).decode()
+            logger.error(f"Shader compilation error: {log}")
+            raise CompileException(log)
+        # logger.debug(f"{shader_type} compiled")
+        return shader
 
-    def __init_framebuffer(self) -> None:
+    def __update_framebuffer_size(self) -> None:
+        """Update framebuffer and texture sizes without recreating them"""
         glfw.make_context_current(self.__window)
 
-        self.__fbo = gl.glGenFramebuffers(1)
+        # Bind existing FBO and texture
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
-
-        self.__fbo_texture = gl.glGenTextures(1)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.__fbo_texture)
+
+        # Update sizes
         glfw.set_window_size(self.__window, self.__size[0], self.__size[1])
-
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, self.__size[0], self.__size[1], 0, gl.GL_RGBA, gl.GL_FLOAT, None)
-
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.__fbo_texture, 0)
-
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F,
+                       self.__size[0], self.__size[1], 0,
+                       gl.GL_RGBA, gl.GL_FLOAT, None)
         gl.glViewport(0, 0, self.__size[0], self.__size[1])
 
-        self.__empty_image = np.zeros((self.__size[1], self.__size[0]), np.uint8)
-        logger.debug("init framebuffer")
+        # Update internal buffers
+        self.__empty_image = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+        self.__last_frame = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+
+        # Clear texture hashes to force texture updates at new size
+        self.__texture_hashes.clear()
 
     def __del__(self) -> None:
-        self.__cleanup()
+        glfw.make_context_current(self.__window)
+        old = [v[3] for v in self.__userVar.values() if v[0] == 'sampler2D']
+        if len(old):
+            gl.glDeleteTextures(old)
+            logger.debug("texture destroyed")
+
+        if self.__fbo_texture:
+            gl.glDeleteTextures(1, [self.__fbo_texture])
+            logger.debug("fbo_texture destroyed")
+
+        if self.__fbo:
+            gl.glDeleteFramebuffers(1, [self.__fbo])
+            logger.debug("fbo destroyed")
+
+        if self.__program:
+            gl.glDeleteProgram(self.__program)
+            logger.debug("program destroyed")
+
+        if self.__window:
+            glfw.destroy_window(self.__window)
+            logger.debug("window destroyed")
+
         #if self.__window is not None:
         #    if glfw is not None:
         #        glfw.destroy_window(self.__window)
@@ -387,33 +381,24 @@ class GLSLShader:
         # glfw.terminate()
 
     @property
-    def vertex(self) -> str:
-        return self.__source_vertex_raw
-
-    @vertex.setter
-    def vertex(self, program:str) -> None:
-        self.__init_program(vertex=program)
-
-    @property
-    def fragment(self) -> str:
-        return self.__source_fragment_raw
-
-    @fragment.setter
-    def fragment(self, program:str) -> None:
-        self.__init_program(fragment=program)
-
-    @property
     def size(self) -> Tuple[int, int]:
         return self.__size
 
     @size.setter
-    def size(self, size:Tuple[int, int]) -> None:
-        size = (min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, size[0])),
-                min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, size[1])))
+    def size(self, size: Tuple[int, int]) -> None:
+        sz = (min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, size[0])),
+              min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, size[1])))
 
-        if size[0] != self.__size[0] or size[1] != self.__size[1]:
-            self.__size = size
-            self.__init_window(force=True)
+        if sz[0] != self.__size[0] or sz[1] != self.__size[1]:
+            self.__size = sz
+            self.__update_framebuffer_size()
+            logger.debug(f"size set {sz} ==> {self.__size}")
+
+            # Update resolution uniform
+            if (rez := self.__shaderVar.get('iResolution', -1)) > -1:
+                glfw.make_context_current(self.__window)
+                gl.glUseProgram(self.__program)
+                gl.glUniform3f(rez, self.__size[0], self.__size[1], 0)
 
     @property
     def runtime(self) -> float:
@@ -483,6 +468,7 @@ class GLSLShader:
             gl.glUniform1i(val, self.frame)
 
         texture_index = -1
+
         for uk, uv in self.__userVar.items():
             p_type, p_loc, p_value, texture_id = uv
             val = kw.get(uk, p_value)
@@ -516,14 +502,14 @@ class GLSLShader:
 
                     self.__texture_hashes[uk] = current_hash
 
-                # Set edge wrapping modes
-                for idx, text_wrap in enumerate([gl.GL_TEXTURE_WRAP_S, gl.GL_TEXTURE_WRAP_T]):
-                    if tile_edge[idx] == EnumEdgeWrap.WRAP:
-                        gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_REPEAT)
-                    elif tile_edge[idx] == EnumEdgeWrap.MIRROR:
-                        gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_MIRRORED_REPEAT)
-                    else:
-                        gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_CLAMP_TO_EDGE)
+                    # Set edge wrapping modes
+                    for idx, text_wrap in enumerate([gl.GL_TEXTURE_WRAP_S, gl.GL_TEXTURE_WRAP_T]):
+                        if tile_edge[idx] == EnumEdgeWrap.WRAP:
+                            gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_REPEAT)
+                        elif tile_edge[idx] == EnumEdgeWrap.MIRROR:
+                            gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_MIRRORED_REPEAT)
+                        else:
+                            gl.glTexParameteri(gl.GL_TEXTURE_2D, text_wrap, gl.GL_CLAMP_TO_EDGE)
 
                 gl.glUniform1i(p_loc, texture_index)
             elif val:
@@ -595,126 +581,27 @@ def load_file_glsl(fname: str) -> str:
 # === COMFYUI NODES ===
 # ==============================================================================
 
-class GLSLNodeBase(JOVBaseNode):
+class GLSLNodeDynamic(JOVBaseNode):
     CATEGORY = f"JOVI_GLSL 🔺🟩🔵"
     CONTROL = []
+    PARAM = []
 
     @classmethod
     def INPUT_TYPES(cls) -> dict:
-        d = super().INPUT_TYPES()
-
+        original_params = super().INPUT_TYPES()
         for ctrl in cls.CONTROL:
             match ctrl.upper():
                 case "WH":
-                    d["optional"]["WH"] = ("VEC2INT", {"default": (512, 512), "mij":IMAGE_SIZE_MIN, "label": ['W', 'H']})
+                    original_params["optional"]["WH"] = ("VEC2INT", {"default": (512, 512), "mij":IMAGE_SIZE_MIN, "label": ['W', 'H']})
                 case "MATTE":
-                    d["optional"]["MATTE"] = ("VEC4INT", {"default": (0, 0, 0, 255), "rgb": True})
+                    original_params["optional"]["MATTE"] = ("VEC4INT", {"default": (0, 0, 0, 255), "rgb": True})
         """
         'MODE': (EnumScaleMode._member_names_, {"default": EnumScaleMode.MATTE.name})
         'SAMPLE': (EnumInterpolation._member_names_, {"default": EnumInterpolation.LANCZOS4.name})
         'EDGE_X': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name})
         'EDGE_Y': (EnumEdgeWrap._member_names_, {"default": EnumEdgeWrap.CLAMP.name})
         """
-        return d
 
-    def __init__(self, *arg, **kw) -> None:
-        super().__init__(*arg, **kw)
-        self.__glsl = GLSLShader()
-        self.__delta = 0
-
-    def run(self, ident, **kw) -> Tuple[torch.Tensor]:
-        batch = parse_param(kw, 'BATCH', EnumConvertType.INT, 0, 0, 1048576)[0]
-        delta = parse_param(kw, 'TIME', EnumConvertType.FLOAT, 0)[0]
-
-        # everybody wang comp tonight
-        #mode = parse_param(kw, 'MODE', EnumScaleMode, EnumScaleMode.MATTE.name)[0]
-        wihi = parse_param(kw, 'WH', EnumConvertType.VEC2INT, [(512, 512)], IMAGE_SIZE_MIN)[0]
-        #sample = parse_param(kw, 'SAMPLE', EnumInterpolation, EnumInterpolation.LANCZOS4.name)[0]
-        matte = parse_param(kw, 'MATTE', EnumConvertType.VEC4INT, [(0, 0, 0, 255)], 0, 255)[0]
-        #edge_x = parse_param(kw, 'EDGE_X', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
-        #edge_y = parse_param(kw, 'EDGE_Y', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
-        #edge = (edge_x, edge_y)
-
-        try:
-            self.__glsl.vertex = getattr(self, 'VERTEX', kw.pop('VERTEX', None))
-            self.__glsl.fragment = getattr(self, 'FRAGMENT', kw.pop('FRAGMENT', None))
-        except CompileException as e:
-            comfy_message(ident, "jovi-glsl-error", {"id": ident, "e": str(e)})
-            logger.error(self.NAME)
-            logger.error(e)
-            return
-
-        self.__glsl.fps = parse_param(kw, 'FPS', EnumConvertType.INT, 24, 1, 120)[0]
-
-        variables = kw.copy()
-        for p in ['WH', 'MATTE', 'BATCH', 'TIME', 'FPS']:
-            variables.pop(p, None)
-
-        if batch > 0 or self.__delta != delta:
-            self.__delta = delta
-        step = 1. / self.__glsl.fps
-
-        images = []
-        vars = {}
-        batch = max(1, batch)
-
-        for k, var in variables.items():
-            if isinstance(var, (torch.Tensor)):
-                print(var.shape)
-                batch = max(batch, var.shape[0])
-                var = [image_convert(tensor2cv(v), 4) for v in var]
-            elif isinstance(var, (list, tuple,)):
-                batch = max(batch, len(var))
-            variables[k] = var if isinstance(var, (list, tuple,)) else [var]
-
-        pbar = ProgressBar(batch)
-        for idx in range(batch):
-            for k, val in variables.items():
-                vars[k] = val[idx % len(val)]
-
-            w, h = wihi
-            if len(images) > 0:
-                h, w = images[0].shape[:2]
-            self.__glsl.size = (w, h)
-
-            img = self.__glsl.render(self.__delta, **vars)
-            images.append(cv2tensor_full(img, matte))
-            self.__delta += step
-            comfy_message(ident, "jovi-glsl-time", {"id": ident, "t": self.__delta})
-            pbar.update_absolute(idx)
-        return [torch.stack(i) for i in zip(*images)]
-
-class GLSLNode(GLSLNodeBase):
-    NAME = "GLSL (JOV_GL) 🍩"
-    DESCRIPTION = """
-Execute custom GLSL (OpenGL Shading Language) fragment shaders to generate images or apply effects. GLSL is a high-level shading language used for graphics programming, particularly in the context of rendering images or animations. This node allows for real-time rendering of shader effects, providing flexibility and creative control over image processing pipelines. It takes advantage of GPU acceleration for efficient computation, enabling the rapid generation of complex visual effects.
-"""
-
-    @classmethod
-    def INPUT_TYPES(cls) -> dict:
-        d = super().INPUT_TYPES()
-        opts = d.get('optional', {})
-        opts.update({
-            'BATCH': ("INT", {"default": 0, "mij": 0, "maj": 1048576}),
-            'FPS': ("INT", {"default": 24, "mij": 1, "maj": 120}),
-            'TIME': ("FLOAT", {"default": 0, "step": 0.0001, "mij": 0}),
-            'VERTEX': ("STRING", {"default": PROG_VERTEX, "multiline": True, "dynamicPrompts": False}),
-            'FRAGMENT': ("STRING", {"default": PROG_FRAGMENT, "multiline": True, "dynamicPrompts": False}),
-        })
-        d['optional'] = opts
-        return d
-
-    @classmethod
-    def IS_CHANGED(cls, **kw) -> float:
-        return float('nan')
-
-class GLSLNodeDynamic(GLSLNodeBase):
-
-    PARAM = []
-
-    @classmethod
-    def INPUT_TYPES(cls) -> dict:
-        original_params = super().INPUT_TYPES()
         opts = original_params.get('optional', {})
         opts.update({
             'FRAGMENT': ("STRING", {"default": cls.FRAGMENT}),
@@ -769,6 +656,80 @@ class GLSLNodeDynamic(GLSLNodeBase):
         data.update(opts)
         original_params['optional'] = data
         return original_params
+
+    @classmethod
+    def IS_CHANGED(cls, **kw) -> float:
+        return float('nan')
+
+    def __init__(self, *arg, **kw) -> None:
+        super().__init__(*arg, **kw)
+        self.__glsl = None
+        self.__delta = 0
+
+    def run(self, ident, **kw) -> Tuple[torch.Tensor]:
+        batch = parse_param(kw, 'BATCH', EnumConvertType.INT, 0, 0, 1048576)[0]
+        delta = parse_param(kw, 'TIME', EnumConvertType.FLOAT, 0)[0]
+
+        # everybody wang comp tonight
+        #mode = parse_param(kw, 'MODE', EnumScaleMode, EnumScaleMode.MATTE.name)[0]
+        wihi = parse_param(kw, 'WH', EnumConvertType.VEC2INT, [(512, 512)], IMAGE_SIZE_MIN)[0]
+        #sample = parse_param(kw, 'SAMPLE', EnumInterpolation, EnumInterpolation.LANCZOS4.name)[0]
+        matte = parse_param(kw, 'MATTE', EnumConvertType.VEC4INT, [(0, 0, 0, 255)], 0, 255)[0]
+        #edge_x = parse_param(kw, 'EDGE_X', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
+        #edge_y = parse_param(kw, 'EDGE_Y', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
+        #edge = (edge_x, edge_y)
+
+        variables = kw.copy()
+        for p in ['WH', 'MATTE', 'BATCH', 'TIME', 'FPS']:
+            variables.pop(p, None)
+
+        if self.__glsl is None:
+            try:
+                vertex = getattr(self, 'VERTEX', kw.pop('VERTEX', None))
+                fragment = getattr(self, 'FRAGMENT', kw.pop('FRAGMENT', None))
+            except CompileException as e:
+                comfy_message(ident, "jovi-glsl-error", {"id": ident, "e": str(e)})
+                logger.error(self.NAME)
+                logger.error(e)
+                return
+
+            fps = parse_param(kw, 'FPS', EnumConvertType.INT, 24, 1, 120)[0]
+            self.__glsl = GLSLShader(vertex, fragment, fps=fps)
+
+        if batch > 0 or self.__delta != delta:
+            self.__delta = delta
+        step = 1. / self.__glsl.fps
+
+        images = []
+        vars = {}
+        batch = max(1, batch)
+
+        for k, var in variables.items():
+            if isinstance(var, (torch.Tensor)):
+                batch = max(batch, var.shape[0])
+                var = [image_convert(tensor2cv(v), 4) for v in var]
+            elif isinstance(var, (list, tuple,)):
+                batch = max(batch, len(var))
+            variables[k] = var if isinstance(var, (list, tuple,)) else [var]
+
+        # if there are input images, use the first one we come across as the w,h requirement
+        # unless there is an explcit override?
+        firstImage = None
+        pbar = ProgressBar(batch)
+        for idx in range(batch):
+            for k, val in variables.items():
+                vars[k] = val[idx % len(val)]
+                if firstImage is None and 'WH' not in self.CONTROL and isinstance(vars[k], (np.ndarray,)):
+                    firstImage = vars[k].shape[:2][::-1]
+
+            self.__glsl.size = wihi if firstImage is None else firstImage
+
+            img = self.__glsl.render(self.__delta, **vars)
+            images.append(cv2tensor_full(img, matte))
+            self.__delta += step
+            comfy_message(ident, "jovi-glsl-time", {"id": ident, "t": self.__delta})
+            pbar.update_absolute(idx)
+        return [torch.stack(i) for i in zip(*images)]
 
 def import_dynamic() -> Tuple[str,...]:
     ret = []

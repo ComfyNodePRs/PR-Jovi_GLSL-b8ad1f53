@@ -11,3 +11,4 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec4 col = texture(image, uv);
 	fragColor = mix(col, 1.0 - col, invert);
 }
+

@@ -20,7 +20,7 @@ from loguru import logger
 from comfy.utils import ProgressBar
 
 from Jovi_GLSL import GLSL_INTERNAL, GLSL_CUSTOM, JOV_TYPE_IMAGE, ROOT, \
-    JOVBaseNode, \
+    JOVBaseNode, Singleton, \
     comfy_message
 
 from Jovi_GLSL.core import IMAGE_SIZE_DEFAULT, IMAGE_SIZE_MAX, IMAGE_SIZE_MIN, \
@@ -145,40 +145,32 @@ class EnumGLSLColorConvert(Enum):
 
 class CompileException(Exception): pass
 
-class GLSLManager:
-    """Singleton manager for GLFW initialization and global shader resources"""
-    _instance = None
-    _init = False
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+class GLSLManager(metaclass=Singleton):
+    """GLFW initialization and global shader resources"""
 
     def __init__(self):
-        if self._init:
-            return
         if not glfw.init():
             raise RuntimeError("GLFW failed to initialize")
-        self._init = True
         self.__active_shaders = set()
+        logger.debug(f"GLSL Manager init")
 
-    def register_shader(self, shader):
+    def register_shader(self, node, shader):
         self.__active_shaders.add(shader)
+        logger.debug(f"{node.NAME} registered")
 
     def unregister_shader(self, shader):
         self.__active_shaders.discard(shader)
-        if not self.__active_shaders and self._init:
+        # logger.debug(f"{shader} unregistered")
+        if not self.__active_shaders:
             glfw.terminate()
-            self._init = False
 
 class GLSLShader:
     """
     """
 
-    def __init__(self, vertex:str=None, fragment:str=None, width:int=IMAGE_SIZE_DEFAULT, height:int=IMAGE_SIZE_DEFAULT, fps:int=30) -> None:
+    def __init__(self, node, vertex:str=None, fragment:str=None, width:int=IMAGE_SIZE_DEFAULT, height:int=IMAGE_SIZE_DEFAULT, fps:int=30) -> None:
         self.__glsl_manager = GLSLManager()
-        self.__glsl_manager.register_shader(self)
+        self.__glsl_manager.register_shader(node, self)
 
         self.__size: Tuple[int, int] = (max(width, IMAGE_SIZE_MIN), max(height, IMAGE_SIZE_MIN))
         self.__runtime: float = 0
@@ -218,6 +210,9 @@ class GLSLShader:
 
         self.__empty_image: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
         self.__last_frame: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+        self.__shaderVar = {}
+        self.__userVar = {}
+        self.__program = None
 
         try:
             if vertex is None:
@@ -258,7 +253,6 @@ class GLSLShader:
             gl.glUseProgram(self.__program)
 
             # Setup uniforms
-            self.__shaderVar = {}
             statics = ['iResolution', 'iTime', 'iFrameRate', 'iFrame']
             for s in statics:
                 if (val := gl.glGetUniformLocation(self.__program, s)) > -1:
@@ -269,7 +263,6 @@ class GLSLShader:
             logger.debug("uniforms initialized")
 
             # Setup user variables
-            self.__userVar = {}
             for match in RE_VARIABLE.finditer(fragment):
                 typ, name, default, *_ = match.groups()
 
@@ -330,7 +323,7 @@ class GLSLShader:
                 self.__fbo_texture = None
 
             if self.__fbo:
-                gl.glDeleteFramebuffers([self.__fbo])
+                gl.glDeleteFramebuffers(1, [self.__fbo])
                 self.__fbo = None
 
             if self.__program:
@@ -671,7 +664,7 @@ class GLSLNodeDynamic(JOVBaseNode):
                 return
 
             fps = parse_param(kw, 'FPS', EnumConvertType.INT, 24, 1, 120)[0]
-            self.__glsl = GLSLShader(vertex, fragment, fps=fps)
+            self.__glsl = GLSLShader(self, vertex, fragment, fps=fps)
 
         if batch > 0 or self.__delta != delta:
             self.__delta = delta
@@ -742,6 +735,8 @@ def import_dynamic() -> Tuple[str,...]:
             "FRAGMENT": shader,
             "PARAM": meta.get('_', []),
             "CONTROL": [x.upper().strip() for x in meta.get('control', "").split(",") if len(x) > 0],
+            "PASS": [x.strip() for x in meta.get('pass', "").split(",") if len(x) > 0],
+            "OUTPUT": [x.strip() for x in meta.get('output', "").split(",") if len(x) > 0],
             "SORT": sort_order,
         })
 

@@ -25,6 +25,7 @@ import json
 import inspect
 import importlib
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -48,6 +49,20 @@ JOV_WEB = ROOT / 'web'
 JOV_INTERNAL = os.getenv("JOV_INTERNAL", 'false').strip().lower() in ('true', '1', 't')
 JOV_LOG_LEVEL = os.getenv("JOV_LOG_LEVEL", "INFO")
 logger.configure(handlers=[{"sink": sys.stdout, "level": JOV_LOG_LEVEL}])
+
+# ==============================================================================
+# === THERE CAN BE ONLY ONE ===
+# ==============================================================================
+
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *arg, **kw) -> Any:
+        # If the instance does not exist, create and store it
+        if cls not in cls._instances:
+            instance = super().__call__(*arg, **kw)
+            cls._instances[cls] = instance
+        return cls._instances[cls]
 
 # ==============================================================================
 # === CORE NODES ===

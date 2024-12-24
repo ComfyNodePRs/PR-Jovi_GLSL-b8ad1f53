@@ -123,7 +123,7 @@ class EnumEdgeWrap(Enum):
 # ==============================================================================
 
 """
-These are enumerations that are exposed to the shader scripts.
+Enumerations exposed to the shader scripts
 """
 class EnumGLSLColorConvert(Enum):
     RGB2HSV = 0
@@ -145,83 +145,45 @@ class EnumGLSLColorConvert(Enum):
 
 class CompileException(Exception): pass
 
-class ShaderCache:
-    """Cache for compiled shaders to avoid recompilation of identical source code"""
+class GLSLManager:
+    """Singleton manager for GLFW initialization and global shader resources"""
+    _instance = None
+    _init = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        self.vertex_cache = {}  # (source, shader_type) -> compiled_shader
-        self.fragment_cache = {}
-        self.program_cache = {}  # (vertex_source, fragment_source) -> program
+        if self._init:
+            return
+        if not glfw.init():
+            raise RuntimeError("GLFW failed to initialize")
+        self._init = True
+        self.__active_shaders = set()
 
-    def get_compiled_shader(self, source: str, shader_type: int) -> int:
-        """Get compiled shader from cache or compile and cache it"""
-        cache = self.vertex_cache if shader_type == gl.GL_VERTEX_SHADER else self.fragment_cache
-        cache_key = hash(source)
+    def register_shader(self, shader):
+        self.__active_shaders.add(shader)
 
-        if cache_key in cache:
-            return cache[cache_key]
-
-        shader = gl.glCreateShader(shader_type)
-        gl.glShaderSource(shader, source)
-        gl.glCompileShader(shader)
-
-        if gl.glGetShaderiv(shader, gl.GL_COMPILE_STATUS) != gl.GL_TRUE:
-            log = gl.glGetShaderInfoLog(shader).decode()
-            gl.glDeleteShader(shader)
-            raise CompileException(log)
-
-        cache[cache_key] = shader
-        return shader
-
-    def get_program(self, vertex_source: str, fragment_source: str) -> int:
-        """Get linked program from cache or create and cache it"""
-        cache_key = (hash(vertex_source), hash(fragment_source))
-
-        if cache_key in self.program_cache:
-            return self.program_cache[cache_key]
-
-        vertex_shader = self.get_compiled_shader(vertex_source, gl.GL_VERTEX_SHADER)
-        fragment_shader = self.get_compiled_shader(fragment_source, gl.GL_FRAGMENT_SHADER)
-
-        program = gl.glCreateProgram()
-        gl.glAttachShader(program, vertex_shader)
-        gl.glAttachShader(program, fragment_shader)
-        gl.glLinkProgram(program)
-
-        if gl.glGetProgramiv(program, gl.GL_LINK_STATUS) != gl.GL_TRUE:
-            log = gl.glGetProgramInfoLog(program).decode()
-            gl.glDeleteProgram(program)
-            raise RuntimeError(log)
-
-        self.program_cache[cache_key] = program
-        return program
-
-    def cleanup(self):
-        """Delete all cached shaders and programs"""
-        glfw.make_context_current(self.__window)
-        for shader in self.vertex_cache.values():
-            gl.glDeleteShader(shader)
-        for shader in self.fragment_cache.values():
-            gl.glDeleteShader(shader)
-        for program in self.program_cache.values():
-            gl.glDeleteProgram(program)
-        self.vertex_cache.clear()
-        self.fragment_cache.clear()
-        self.program_cache.clear()
+    def unregister_shader(self, shader):
+        self.__active_shaders.discard(shader)
+        if not self.__active_shaders and self._init:
+            glfw.terminate()
+            self._init = False
 
 class GLSLShader:
     """
     """
 
     def __init__(self, vertex:str=None, fragment:str=None, width:int=IMAGE_SIZE_DEFAULT, height:int=IMAGE_SIZE_DEFAULT, fps:int=30) -> None:
-        if not glfw.init():
-            raise RuntimeError("GLFW did not init")
+        self.__glsl_manager = GLSLManager()
+        self.__glsl_manager.register_shader(self)
 
         self.__size: Tuple[int, int] = (max(width, IMAGE_SIZE_MIN), max(height, IMAGE_SIZE_MIN))
         self.__runtime: float = 0
         self.__fps: int = min(120, max(1, fps))
         self.__mouse: Tuple[int, int] = (0, 0)
-        self.__shaderVar = {}
-        self.__userVar = {}
         self.__bgcolor = (0, 0, 0, 1.)
         self.__textures = {}
         self.__uniform_state = {}
@@ -230,155 +192,161 @@ class GLSLShader:
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
         self.__window = glfw.create_window(self.__size[0], self.__size[1], "hidden", None, None)
         if not self.__window:
+            # glfw.terminate()
             raise RuntimeError("GLFW did not init window")
         logger.debug("window created")
+
         glfw.make_context_current(self.__window)
 
+        # framebuffer
         self.__fbo = gl.glGenFramebuffers(1)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
         logger.debug("framebuffer created")
 
         self.__fbo_texture = gl.glGenTextures(1)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.__fbo_texture)
-
-        glfw.set_window_size(self.__window, self.__size[0], self.__size[1])
-        logger.debug("framebuffer texture created")
-
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, self.__size[0], self.__size[1], 0, gl.GL_RGBA, gl.GL_FLOAT, None)
-
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F,
+                        self.__size[0], self.__size[1], 0,
+                        gl.GL_RGBA, gl.GL_FLOAT, None)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
         gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.__fbo_texture, 0)
+        logger.debug("framebuffer texture created")
+
         gl.glViewport(0, 0, self.__size[0], self.__size[1])
         logger.debug("viewport created")
 
         self.__empty_image: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
         self.__last_frame: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
 
-        self.__update_framebuffer_size()
-        self.__program = None
+        try:
+            if vertex is None:
+                logger.debug("vertex program is empty. using default.")
+                vertex = PROG_VERTEX
+            vertex_shader = gl.glCreateShader(gl.GL_VERTEX_SHADER)
+            gl.glShaderSource(vertex_shader, vertex)
+            gl.glCompileShader(vertex_shader)
+            if gl.glGetShaderiv(vertex_shader, gl.GL_COMPILE_STATUS) != gl.GL_TRUE:
+                raise CompileException(gl.glGetShaderInfoLog(vertex_shader).decode())
+            logger.debug("vertex program ready")
 
-        if vertex is None:
-            logger.debug("Vertex program is empty. Using Default.")
-            vertex = PROG_VERTEX
-        self.__source_vertex: int = self.__compile_shader(vertex, gl.GL_VERTEX_SHADER)
+            if fragment is None:
+                logger.debug("fragment program is empty. using default.")
+                fragment = PROG_FRAGMENT
+            fragment_raw = PROG_HEADER + fragment + PROG_FOOTER
+            fragment_shader = gl.glCreateShader(gl.GL_FRAGMENT_SHADER)
+            gl.glShaderSource(fragment_shader, fragment_raw)
+            gl.glCompileShader(fragment_shader)
+            if gl.glGetShaderiv(fragment_shader, gl.GL_COMPILE_STATUS) != gl.GL_TRUE:
+                gl.glDeleteShader(vertex_shader)
+                raise CompileException(gl.glGetShaderInfoLog(fragment_shader).decode())
+            logger.debug("fragment program ready")
 
-        if fragment is None:
-            logger.debug("Fragment program is empty. Using Default.")
-            fragment = PROG_FRAGMENT
-        fragment_full = PROG_HEADER + fragment + PROG_FOOTER
-        self.__source_fragment: int = self.__compile_shader(fragment_full, gl.GL_FRAGMENT_SHADER)
+            self.__program = gl.glCreateProgram()
+            gl.glAttachShader(self.__program, vertex_shader)
+            gl.glAttachShader(self.__program, fragment_shader)
+            gl.glLinkProgram(self.__program)
+            logger.debug("program linked")
 
-        self.__program = gl.glCreateProgram()
-        gl.glAttachShader(self.__program, self.__source_vertex)
-        gl.glAttachShader(self.__program, self.__source_fragment)
-        gl.glLinkProgram(self.__program)
-        if gl.glGetProgramiv(self.__program, gl.GL_LINK_STATUS) != gl.GL_TRUE:
-            log = gl.glGetProgramInfoLog(self.__program).decode()
-            logger.error(f"Program linking error: {log}")
-            raise RuntimeError(log)
+            # Clean up shaders after linking
+            gl.glDeleteShader(vertex_shader)
+            gl.glDeleteShader(fragment_shader)
 
-        gl.glUseProgram(self.__program)
+            if gl.glGetProgramiv(self.__program, gl.GL_LINK_STATUS) != gl.GL_TRUE:
+                raise CompileException(gl.glGetProgramInfoLog(self.__program).decode())
 
-        self.__shaderVar = {}
-        statics = ['iResolution', 'iTime', 'iFrameRate', 'iFrame']
-        for s in statics:
-            if (val := gl.glGetUniformLocation(self.__program, s)) > -1:
-                self.__shaderVar[s] = val
+            gl.glUseProgram(self.__program)
 
-        if (resolution := self.__shaderVar.get('iResolution', -1)) > -1:
-            gl.glUniform3f(resolution, self.__size[0], self.__size[1], 0)
+            # Setup uniforms
+            self.__shaderVar = {}
+            statics = ['iResolution', 'iTime', 'iFrameRate', 'iFrame']
+            for s in statics:
+                if (val := gl.glGetUniformLocation(self.__program, s)) > -1:
+                    self.__shaderVar[s] = val
 
-        self.__userVar = {}
-        # read the fragment and setup the vars....
-        for match in RE_VARIABLE.finditer(fragment):
-            typ, name, default, *_ = match.groups()
+            if (resolution := self.__shaderVar.get('iResolution', -1)) > -1:
+                gl.glUniform3f(resolution, self.__size[0], self.__size[1], 0)
+            logger.debug("uniforms initialized")
 
-            texture = None
-            if typ in ['sampler2D']:
-                texture = self.__textures[name] = gl.glGenTextures(1)
-            else:
-                default = default.strip()
-                if default.startswith('EnumGLSL'):
-                    typ = 'int'
-                    if (target_enum := getattr(sys.modules[__name__], default, None)) is not None:
-                        default = target_enum
-                    else:
-                        default = 0
+            # Setup user variables
+            self.__userVar = {}
+            for match in RE_VARIABLE.finditer(fragment):
+                typ, name, default, *_ = match.groups()
 
-            self.__userVar[name] = [
-                # type
-                typ,
-                # gl location
-                gl.glGetUniformLocation(self.__program, name),
-                # default value
-                default,
-                # texture id -- if a texture
-                texture
-            ]
+                texture = None
+                if typ in ['sampler2D']:
+                    texture = self.__textures[name] = gl.glGenTextures(1)
+                else:
+                    default = default.strip()
+                    if default.startswith('EnumGLSL'):
+                        typ = 'int'
+                        default = getattr(sys.modules[__name__], default, 0)
 
-    def __compile_shader(self, source:str, shader_type:str) -> int:
-        glfw.make_context_current(self.__window)
-        shader = gl.glCreateShader(shader_type)
-        gl.glShaderSource(shader, source)
-        gl.glCompileShader(shader)
-        if gl.glGetShaderiv(shader, gl.GL_COMPILE_STATUS) != gl.GL_TRUE:
-            log = gl.glGetShaderInfoLog(shader).decode()
-            logger.error(f"Shader compilation error: {log}")
-            raise CompileException(log)
-        # logger.debug(f"{shader_type} compiled")
-        return shader
+                self.__userVar[name] = [typ, gl.glGetUniformLocation(self.__program, name), default, texture]
+
+            logger.debug("user uniforms initialized")
+        except Exception as e:
+            self.__cleanup()
+            raise CompileException(f"shader compilation failed: {str(e)}")
 
     def __update_framebuffer_size(self) -> None:
         """Update framebuffer and texture sizes without recreating them"""
         glfw.make_context_current(self.__window)
+        glfw.set_window_size(self.__window, self.__size[0], self.__size[1])
 
         # Bind existing FBO and texture
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.__fbo_texture)
 
         # Update sizes
-        glfw.set_window_size(self.__window, self.__size[0], self.__size[1])
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F,
                        self.__size[0], self.__size[1], 0,
                        gl.GL_RGBA, gl.GL_FLOAT, None)
         gl.glViewport(0, 0, self.__size[0], self.__size[1])
 
         # Update internal buffers
-        self.__empty_image = np.zeros((self.__size[0], self.__size[1]), np.uint8)
-        self.__last_frame = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+        if self.__empty_image.shape != (self.__size[0], self.__size[1]):
+            self.__empty_image = np.zeros((self.__size[0], self.__size[1]), np.uint8)
+            self.__last_frame = np.zeros((self.__size[0], self.__size[1]), np.uint8)
 
         # Clear texture hashes to force texture updates at new size
         self.__texture_hashes.clear()
 
-    def __del__(self) -> None:
-        glfw.make_context_current(self.__window)
-        old = [v[3] for v in self.__userVar.values() if v[0] == 'sampler2D']
-        if len(old):
-            gl.glDeleteTextures(old)
-            logger.debug("texture destroyed")
-
-        if self.__fbo_texture:
-            gl.glDeleteTextures(1, [self.__fbo_texture])
-            logger.debug("fbo_texture destroyed")
-
-        if self.__fbo:
-            gl.glDeleteFramebuffers(1, [self.__fbo])
-            logger.debug("fbo destroyed")
-
-        if self.__program:
-            gl.glDeleteProgram(self.__program)
-            logger.debug("program destroyed")
+    def __cleanup(self):
+        """Explicit cleanup of OpenGL resources"""
+        if hasattr(self, '_cleanup_called'):
+            return
+        self._cleanup_called = True
 
         if self.__window:
-            glfw.destroy_window(self.__window)
-            logger.debug("window destroyed")
+            glfw.make_context_current(self.__window)
 
-        #if self.__window is not None:
-        #    if glfw is not None:
-        #        glfw.destroy_window(self.__window)
-        #    self.__window = None
-        # glfw.terminate()
+            texture_ids = [v[3] for v in self.__userVar.values() if v[0] == 'sampler2D']
+            if texture_ids:
+                gl.glDeleteTextures(texture_ids)
+
+            if self.__fbo_texture:
+                gl.glDeleteTextures([self.__fbo_texture])
+                self.__fbo_texture = None
+
+            if self.__fbo:
+                gl.glDeleteFramebuffers([self.__fbo])
+                self.__fbo = None
+
+            if self.__program:
+                gl.glDeleteProgram(self.__program)
+                self.__program = None
+
+            glfw.destroy_window(self.__window)
+            self.__glsl_manager.unregister_shader(self)
+            self.__window = None
+
+    def __del__(self):
+        """Cleanup during garbage collection"""
+        try:
+            self.__cleanup()
+        except:
+            pass
 
     @property
     def size(self) -> Tuple[int, int]:
@@ -485,11 +453,11 @@ class GLSLShader:
                 gl.glActiveTexture(gl.GL_TEXTURE0 + texture_index)
                 gl.glBindTexture(gl.GL_TEXTURE_2D, texture_id)
 
-                # send in black if nothing in input image
-                if not isinstance(val, (np.ndarray,)):
-                    val = self.__empty_image
+                if isinstance(val, np.ndarray):
+                    current_hash = hash((val.ctypes.data, val.shape, val.dtype))
+                else:
+                    current_hash = hash(0)
 
-                current_hash = hash(val.tobytes())
                 if uk not in self.__texture_hashes or self.__texture_hashes[uk] != current_hash:
                     val = image_convert(val, 4)
                     val = val[::-1,:]
@@ -536,7 +504,6 @@ class GLSLShader:
         self.__last_frame = image[::-1, :, :]
 
         glfw.poll_events()
-
         return self.__last_frame
 
 def shader_meta(shader: str) -> Dict[str, Any]:

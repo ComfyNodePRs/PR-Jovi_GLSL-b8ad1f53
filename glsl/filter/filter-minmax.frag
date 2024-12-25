@@ -1,4 +1,4 @@
-// name: MIN-MAX
+// name: MIN MAX
 // desc: Gets the minimum and maximum of an image
 // category: FILTER
 

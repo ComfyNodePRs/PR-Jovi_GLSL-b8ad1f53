@@ -2,40 +2,74 @@
      http://www.github.com/Amorano/Jovi_GLSL
 """
 
+import os
+import re
 import json
 from enum import Enum
-from typing import Any, List, Tuple, Union, Optional
+from pathlib import Path
+from typing import Any, List, Optional, Tuple, Union
 
 import cv2
 import torch
 import numpy as np
 from loguru import logger
 
+from Jovi_GLSL import ROOT, JOVBaseNode, deep_merge, load_file
+
 # ==============================================================================
-# === GLOBAL ===
+# === SHADER LOADER ===
 # ==============================================================================
 
-IMAGE_SIZE_DEFAULT: int = 512
+ROOT_GLSL = ROOT / 'glsl'
+GLSL_PROGRAMS = {
+    "vertex": {  },
+    "fragment": { }
+}
+
+GLSL_PROGRAMS['vertex'].update({str(f.relative_to(ROOT_GLSL).as_posix()):
+                                str(f) for f in Path(ROOT_GLSL).rglob('*.vert')})
+
+USER_GLSL = ROOT / '_user'
+USER_GLSL.mkdir(parents=True, exist_ok=True)
+if (USER_GLSL := os.getenv("JOV_GLSL", str(USER_GLSL))) is not None:
+    GLSL_PROGRAMS['vertex'].update({str(f.relative_to(USER_GLSL).as_posix()):
+                                    str(f) for f in Path(USER_GLSL).rglob('*.vert')})
+
+GLSL_PROGRAMS['fragment'].update({str(f.relative_to(ROOT_GLSL).as_posix()):
+                                  str(f) for f in Path(ROOT_GLSL).rglob('*.frag')})
+if USER_GLSL is not None:
+    GLSL_PROGRAMS['fragment'].update({str(f.relative_to(USER_GLSL).as_posix()):
+                                      str(f) for f in Path(USER_GLSL).rglob('*.frag')})
+
+PROG_VERTEX = None
+try:
+    prog = GLSL_PROGRAMS['vertex'].pop('.lib/_.vert')
+    PROG_VERTEX = load_file(prog)
+except Exception as e:
+    logger.error(e)
+    raise Exception("failed load default vertex program .lib/_.vert")
+
+PROG_FRAGMENT = None
+try:
+    prog = GLSL_PROGRAMS['fragment'].pop('.lib/_.frag')
+    PROG_FRAGMENT = load_file(prog)
+except Exception as e:
+    logger.error(e)
+    raise Exception("failed load default fragment program .lib/_.frag")
+
+PROG_HEADER = load_file(ROOT_GLSL / '.lib/_.head')
+PROG_FOOTER = load_file(ROOT_GLSL / '.lib/_.foot')
+
+logger.info(f"  vertex programs: {len(GLSL_PROGRAMS['vertex'])}")
+logger.info(f"fragment programs: {len(GLSL_PROGRAMS['fragment'])}")
+
+# ==============================================================================
+# === CONSTANT ===
+# ==============================================================================
+
+RE_VARIABLE = re.compile(r"uniform\s+(\w+)\s+(\w+);\s*(?:\/\/\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:\|\s*(.*))?$", re.MULTILINE)
+
 IMAGE_SIZE_MIN: int = 64
-IMAGE_SIZE_MAX: int = 16384
-
-# ==============================================================================
-# === TYPE ===
-# ==============================================================================
-
-TYPE_fCOORD2D = Tuple[float, float]
-
-TYPE_iRGB  = Tuple[int, int, int]
-TYPE_iRGBA = Tuple[int, int, int, int]
-TYPE_fRGB  = Tuple[float, float, float]
-TYPE_fRGBA = Tuple[float, float, float, float]
-
-TYPE_PIXEL = Union[int, float, TYPE_iRGB, TYPE_iRGBA, TYPE_fRGB, TYPE_fRGBA]
-TYPE_IMAGE = Union[np.ndarray, torch.Tensor]
-
-# ==============================================================================
-# === ENUMERATION ===
-# ==============================================================================
 
 class EnumConvertType(Enum):
     BOOLEAN = 1
@@ -59,16 +93,58 @@ class EnumConvertType(Enum):
     # MIXLAB LAYER
     LAYER = 8
 
+PTYPE = {
+    'bool': EnumConvertType.BOOLEAN,
+    'int': EnumConvertType.INT,
+    'ivec2': EnumConvertType.VEC2INT,
+    'ivec3': EnumConvertType.VEC3INT,
+    'ivec4': EnumConvertType.VEC4INT,
+    'float': EnumConvertType.FLOAT,
+    'vec2': EnumConvertType.VEC2,
+    'vec3': EnumConvertType.VEC3,
+    'vec4': EnumConvertType.VEC4,
+    'sampler2D': EnumConvertType.IMAGE
+}
+
+# ==============================================================================
+# === TYPE ===
+# ==============================================================================
+
+TYPE_fCOORD2D = Tuple[float, float]
+
+TYPE_iRGB  = Tuple[int, int, int]
+TYPE_iRGBA = Tuple[int, int, int, int]
+TYPE_fRGB  = Tuple[float, float, float]
+TYPE_fRGBA = Tuple[float, float, float, float]
+
+TYPE_PIXEL = Union[int, float, TYPE_iRGB, TYPE_iRGBA, TYPE_fRGB, TYPE_fRGBA]
+TYPE_IMAGE = Union[np.ndarray, torch.Tensor]
+
 # ==============================================================================
 # === CORE SUPPORT ===
 # ==============================================================================
 
-def load_file(fname: str) -> str | None:
-    try:
-        with open(fname, 'r', encoding='utf-8') as f:
-            return f.read()
-    except Exception as e:
-        logger.error(e)
+class JOVBaseGLSLNode(JOVBaseNode):
+    NOT_IDEMPOTENT = True
+    RETURN_TYPES = ("IMAGE", "IMAGE", "MASK")
+    RETURN_NAMES = ('RGBA', 'RGB', 'MASK')
+    FUNCTION = "run"
+
+    @classmethod
+    def INPUT_TYPES(cls, prompt:bool=False, extra_png:bool=False, dynprompt:bool=False) -> dict:
+        d = super().INPUT_TYPES()
+        d = deep_merge(d, {
+            "outputs": {
+                0: ("IMAGE", {"tooltips":"Full channel [RGBA] image. If there is an alpha, the image will be masked out with it when using this output."}),
+                1: ("IMAGE", {"tooltips":"Three channel [RGB] image. There will be no alpha."}),
+                2: ("MASK", {"tooltips":"Single channel mask output."}),
+            }
+        })
+        return d
+
+# ==============================================================================
+# === CORE SUPPORT ===
+# ==============================================================================
 
 def parse_value(val:Any, typ:EnumConvertType, default: Any,
                 clip_min: Optional[float]=None, clip_max: Optional[float]=None,
@@ -116,6 +192,8 @@ def parse_value(val:Any, typ:EnumConvertType, default: Any,
 
         if not isinstance(val, (list, tuple, torch.Tensor)):
             val = [val]
+        elif isinstance(val, (tuple, )):
+            val = list(val)
 
         size = max(1, int(typ.value / 10))
         new_val = []

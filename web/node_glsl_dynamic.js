@@ -7,12 +7,12 @@
 import { app } from "../../scripts/app.js";
 import { widgetFind, widgetHide } from './util_jov.js'
 
-const _id = "GLSL DYNAMIC (JOV_GL) 🧙🏽‍♀️";
+const _id = "GLSL DYNAMIC (JOV_GL)";
 
 app.registerExtension({
     name: 'jovi_glsl.node.' + _id,
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if ((!nodeData.name.endsWith("(JOV_GL) 🧙🏽‍♀️") && !nodeData.name.endsWith("(JOV_GL) 🧙🏽"))) {
+        if ((!nodeData.name.endsWith("(JOV_GL) 🌈") && !nodeData.name.endsWith("(JOV_GL) 🦄"))) {
             return;
         }
 

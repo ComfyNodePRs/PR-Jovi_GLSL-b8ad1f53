@@ -70,15 +70,13 @@ class Singleton(type):
 
 class JOVBaseNode:
     NOT_IDEMPOTENT = True
+    CATEGORY = f"JOVI_GLSL 🔺🟩🔵"
     RETURN_TYPES = ("IMAGE", "IMAGE", "MASK")
     RETURN_NAMES = ('RGBA', 'RGB', 'MASK')
     FUNCTION = "run"
-    # instance map for caching
-    INSTANCE = {}
 
     @classmethod
     def VALIDATE_INPUTS(cls, *arg, **kw) -> bool:
-        # logger.debug(f'validate -- {arg} {kw}')
         return True
 
     @classmethod
@@ -127,16 +125,43 @@ JOV_TYPE_NUMBER = JOV_TYPE_ANY
 JOV_TYPE_IMAGE = JOV_TYPE_ANY
 JOV_TYPE_FULL = JOV_TYPE_ANY
 
-GLSL_INTERNAL = '🧙🏽'
-GLSL_CUSTOM = '🧙🏽‍♀️'
+GLSL_INTERNAL = '🌈'
+GLSL_CUSTOM = '🦄'
 
 # ==============================================================================
-# === NODE LOADER ===
+# === CORE SUPPORT ===
 # ==============================================================================
+
+def load_file(fname: str) -> str | None:
+    try:
+        with open(fname, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(e)
 
 def comfy_message(ident:str, route:str, data:dict) -> None:
     data['id'] = ident
     PromptServer.instance.send_sync(route, data)
+
+def deep_merge(d1: dict, d2: dict) -> dict:
+    """
+    Deep merge multiple dictionaries recursively.
+
+    Args:
+        *dicts: Variable number of dictionaries to be merged.
+
+    Returns:
+        dict: Merged dictionary.
+    """
+    for key in d2:
+        if key in d1:
+            if isinstance(d1[key], dict) and isinstance(d2[key], dict):
+                deep_merge(d1[key], d2[key])
+            else:
+                d1[key] = d2[key]
+        else:
+            d1[key] = d2[key]
+    return d1
 
 # ==============================================================================
 # === NODE LOADER ===

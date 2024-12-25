@@ -14,7 +14,7 @@ import OpenGL.GL as gl
 from loguru import logger
 
 from Jovi_GLSL.core import IMAGE_SIZE_MIN, PROG_VERTEX, PROG_FRAGMENT, \
-    PROG_FOOTER, PROG_HEADER, PTYPE, RE_VARIABLE, \
+    PROG_FOOTER, PROG_HEADER, PTYPE, RE_VARIABLE, CompileException, \
     image_convert, parse_value
 
 from Jovi_GLSL.core.glsl_manager import GLSLManager
@@ -72,8 +72,6 @@ class EnumGLSLColorConvert(Enum):
 # === SHADER SUPPORT ===
 # ==============================================================================
 
-class CompileException(Exception): pass
-
 class GLSLShader:
     """
     """
@@ -113,10 +111,8 @@ class GLSLShader:
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
         gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.__fbo_texture, 0)
-        logger.debug("framebuffer texture created")
-
         gl.glViewport(0, 0, self.__size[0], self.__size[1])
-        logger.debug("viewport created")
+        logger.debug("framebuffer texture created")
 
         self.__empty_image: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
         self.__last_frame: np.ndarray = np.zeros((self.__size[0], self.__size[1]), np.uint8)
@@ -187,7 +183,6 @@ class GLSLShader:
 
                 index = gl.glGetUniformLocation(self.__program, name)
                 self.__userVar[name] = [typ, index, default, texture]
-                # print('init', name, self.__userVar[name])
 
             logger.debug("user uniforms initialized")
         except Exception as e:
@@ -226,25 +221,32 @@ class GLSLShader:
         if self.__window:
             glfw.make_context_current(self.__window)
 
-            texture_ids = [v[3] for v in self.__userVar.values() if v[0] == 'sampler2D']
-            if texture_ids:
-                gl.glDeleteTextures(texture_ids)
+        texture_ids = [v[3] for v in self.__userVar.values() if v[0] == 'sampler2D']
+        if texture_ids:
+            gl.glDeleteTextures(len(texture_ids), texture_ids)
+            logger.debug("texture disposed")
 
-            if self.__fbo_texture:
-                gl.glDeleteTextures([self.__fbo_texture])
-                self.__fbo_texture = None
+        if self.__fbo_texture:
+            gl.glDeleteTextures(1, [self.__fbo_texture])
+            self.__fbo_texture = None
+            logger.debug("framebuffer texture disposed")
 
-            if self.__fbo:
-                gl.glDeleteFramebuffers(1, [self.__fbo])
-                self.__fbo = None
+        if self.__fbo:
+            gl.glDeleteFramebuffers(1, [self.__fbo])
+            self.__fbo = None
+            logger.debug("framebuffer disposed")
 
-            if self.__program:
-                gl.glDeleteProgram(self.__program)
-                self.__program = None
+        if self.__program:
+            gl.glDeleteProgram(self.__program)
+            self.__program = None
+            logger.debug("program disposed")
 
+        if self.__window:
             glfw.destroy_window(self.__window)
-            self.__glsl_manager.unregister_shader(self)
-            self.__window = None
+            logger.debug("window disposed")
+        self.__window = None
+
+        self.__glsl_manager.unregister_shader(self)
 
     def __del__(self):
         """Cleanup during garbage collection"""

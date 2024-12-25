@@ -1,3 +1,6 @@
+#ifndef LIB_CAMERA
+#define LIB_CAMERA
+
 //------------------------------------------------------------------------------
 // CAMERA
 //------------------------------------------------------------------------------
@@ -32,3 +35,5 @@ mat3 camera_eye(vec3 pos, vec3 target, float roll)
     vec3 cv = normalize( cross(cu,cw) );
     return mat3(cu, cv, cw);
 }
+
+#endif

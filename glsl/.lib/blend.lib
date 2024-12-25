@@ -1,3 +1,6 @@
+#ifndef LIB_BLEND
+#define LIB_BLEND
+
 //------------------------------------------------------------------------------
 // COLOR
 //------------------------------------------------------------------------------
@@ -162,3 +165,5 @@ vec3 blend_luminosity(vec3 base, vec3 blend) {
     float lumDiff = blendLum - baseLum;
     return base + lumDiff;
 }
+
+#endif

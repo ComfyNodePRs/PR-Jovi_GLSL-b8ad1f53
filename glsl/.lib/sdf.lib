@@ -1,3 +1,6 @@
+#ifndef LIB_SDF
+#define LIB_SDF
+
 //------------------------------------------------------------------------------
 // SIGNED DISTANCE
 //------------------------------------------------------------------------------
@@ -256,3 +259,5 @@ bool ray_marching(vec3 o, vec3 dir, inout float depth, inout vec3 n) {
     n = normalize(gradient(o + dir * t));
     return true;
 }
+
+#endif

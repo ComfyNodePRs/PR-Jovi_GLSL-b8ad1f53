@@ -1,3 +1,6 @@
+#ifndef LIB_COLOR
+#define LIB_COLOR
+
 //------------------------------------------------------------------------------
 // COLOR
 //------------------------------------------------------------------------------
@@ -369,3 +372,5 @@ vec3 color_grade(vec3 rgb, vec3 lift, vec3 gamma, vec3 gain) {
     vec3 gammaCorrected = pow(liftedColor, 1.0 / gamma);
     return gammaCorrected * gain;
 }
+
+#endif

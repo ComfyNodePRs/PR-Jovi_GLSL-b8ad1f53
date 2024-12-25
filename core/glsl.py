@@ -19,7 +19,7 @@ from Jovi_GLSL import GLSL_INTERNAL, GLSL_CUSTOM, JOV_TYPE_IMAGE, \
 
 from Jovi_GLSL.core import GLSL_PROGRAMS, PTYPE, RE_VARIABLE, ROOT_GLSL, \
     IMAGE_SIZE_MIN, \
-    JOVBaseGLSLNode, EnumConvertType, \
+    CompileException, JOVBaseGLSLNode, EnumConvertType, \
     cv2tensor_full, image_convert, parse_param, parse_value, tensor2cv
 
 from Jovi_GLSL.core.glsl_shader import GLSLShader
@@ -216,8 +216,8 @@ def load_file_glsl(fname: str) -> str:
     include = set()
 
     def scan_include(file:str, idx:int=0) -> str:
-        if idx > 4:
-            return "too many recursive includes"
+        if idx > 8:
+            raise CompileException(f"too many file include recursions ({idx})")
 
         file_path = ROOT_GLSL / file
         if file_path in include:
@@ -227,7 +227,7 @@ def load_file_glsl(fname: str) -> str:
         try:
             result = load_file(file_path)
         except FileNotFoundError:
-            return f"File not found: {file_path}"
+            raise CompileException(f"File not found: {file_path}")
 
         # replace #include directives with their content
         def replace_include(match):
@@ -239,7 +239,6 @@ def load_file_glsl(fname: str) -> str:
         return RE_INCLUDE.sub(replace_include, result)
 
     return scan_include(fname)
-
 
 def import_dynamic() -> Tuple[str,...]:
     ret = []

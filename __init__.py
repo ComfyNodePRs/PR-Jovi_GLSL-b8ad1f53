@@ -25,7 +25,7 @@ import json
 import inspect
 import importlib
 from pathlib import Path
-from typing import Any
+from typing import Any, Generator, Tuple
 
 from loguru import logger
 
@@ -162,6 +162,38 @@ def deep_merge(d1: dict, d2: dict) -> dict:
         else:
             d1[key] = d2[key]
     return d1
+
+def zip_longest_fill(*iterables: Any) -> Generator[Tuple[Any, ...], None, None]:
+    """
+    Zip longest with fill value.
+
+    This function behaves like itertools.zip_longest, but it fills the values
+    of exhausted iterators with their own last values instead of None.
+    """
+    try:
+        iterators = [iter(iterable) for iterable in iterables]
+    except Exception as e:
+        logger.error(iterables)
+        logger.error(str(e))
+    else:
+        while True:
+            values = [next(iterator, None) for iterator in iterators]
+
+            # Check if all iterators are exhausted
+            if all(value is None for value in values):
+                break
+
+            # Fill in the last values of exhausted iterators with their own last values
+            for i, _ in enumerate(iterators):
+                if values[i] is None:
+                    iterator_copy = iter(iterables[i])
+                    while True:
+                        current_value = next(iterator_copy, None)
+                        if current_value is None:
+                            break
+                        values[i] = current_value
+
+            yield tuple(values)
 
 # ==============================================================================
 # === NODE LOADER ===

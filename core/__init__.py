@@ -75,7 +75,9 @@ class CompileException(Exception): pass
 
 RE_VARIABLE = re.compile(r"uniform\s+(\w+)\s+(\w+);\s*(?:\/\/\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:;\s*([^;|]*))?\s*(?:\|\s*(.*))?$", re.MULTILINE)
 
+IMAGE_SIZE_DEFAULT: int = 512
 IMAGE_SIZE_MIN: int = 64
+IMAGE_SIZE_MAX: int = 8192
 
 class EnumConvertType(Enum):
     BOOLEAN = 1
@@ -137,7 +139,7 @@ class JOVBaseGLSLNode(JOVBaseNode):
     FUNCTION = "run"
 
     @classmethod
-    def INPUT_TYPES(cls, prompt:bool=False, extra_png:bool=False, dynprompt:bool=False) -> dict:
+    def INPUT_TYPES(cls) -> dict:
         d = super().INPUT_TYPES()
         d = deep_merge(d, {
             "outputs": {

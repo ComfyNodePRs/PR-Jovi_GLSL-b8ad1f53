@@ -9,16 +9,15 @@ from typing import Any, Dict, Tuple
 from enum import Enum
 
 import torch
-import numpy as np
 from loguru import logger
 
 from comfy.utils import ProgressBar
 
 from Jovi_GLSL import GLSL_INTERNAL, GLSL_CUSTOM, JOV_TYPE_IMAGE, \
-    comfy_message, load_file
+    comfy_message, load_file, zip_longest_fill
 
 from Jovi_GLSL.core import GLSL_PROGRAMS, PTYPE, RE_VARIABLE, ROOT_GLSL, \
-    IMAGE_SIZE_MIN, \
+    IMAGE_SIZE_MIN, IMAGE_SIZE_DEFAULT, IMAGE_SIZE_MAX, \
     CompileException, JOVBaseGLSLNode, EnumConvertType, \
     cv2tensor_full, image_convert, parse_param, parse_value, tensor2cv
 
@@ -137,23 +136,28 @@ class GLSLNodeDynamic(JOVBaseGLSLNode):
         super().__init__(*arg, **kw)
         self.__glsl = None
         self.__delta = 0
+        # current frame, if we are in batch mode, this will advance
+        self.__frame = 0
 
     def run(self, ident, **kw) -> Tuple[torch.Tensor]:
+        # batch is a single value entry -- drives everyone else.
         batch = parse_param(kw, 'BATCH', EnumConvertType.INT, 0, 0, 1048576)[0]
-        delta = parse_param(kw, 'TIME', EnumConvertType.FLOAT, 0)[0]
+        batch = [batch] * max(1, batch)
 
-        # everybody wang comp tonight
-        #mode = parse_param(kw, 'MODE', EnumScaleMode, EnumScaleMode.MATTE.name)[0]
-        wihi = parse_param(kw, 'WH', EnumConvertType.VEC2INT, [(512, 512)], IMAGE_SIZE_MIN)[0]
-        #sample = parse_param(kw, 'SAMPLE', EnumInterpolation, EnumInterpolation.LANCZOS4.name)[0]
-        matte = parse_param(kw, 'MATTE', EnumConvertType.VEC4INT, [(0, 0, 0, 255)], 0, 255)[0]
+        iFrame = parse_param(kw, 'FRAME', EnumConvertType.FLOAT, 0)
+        iFrameRate = parse_param(kw, 'FPS', EnumConvertType.INT, 24)
+        iResolution = parse_param(kw, 'WH', EnumConvertType.VEC2INT,
+                                  [(IMAGE_SIZE_DEFAULT, IMAGE_SIZE_DEFAULT)],
+                                  IMAGE_SIZE_MIN, IMAGE_SIZE_MAX)
+        bgcolor = parse_param(kw, 'MATTE', EnumConvertType.VEC4INT, [(0, 0, 0, 255)], 0, 255)
+
         #edge_x = parse_param(kw, 'EDGE_X', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
         #edge_y = parse_param(kw, 'EDGE_Y', EnumEdgeWrap, EnumEdgeWrap.CLAMP.name)[0]
         #edge = (edge_x, edge_y)
 
         variables = kw.copy()
-        for p in ['WH', 'MATTE', 'BATCH', 'TIME', 'FPS']:
-            variables.pop(p, None)
+        for k in ['BATCH', 'FRAME', 'FPS', 'WH', 'MATTE']:
+            variables.pop(k, None)
 
         if self.__glsl is None:
             try:
@@ -165,39 +169,42 @@ class GLSLNodeDynamic(JOVBaseGLSLNode):
                 logger.error(e)
                 return
 
-            fps = parse_param(kw, 'FPS', EnumConvertType.INT, 24, 1, 120)[0]
-            self.__glsl = GLSLShader(self, vertex, fragment, fps=fps)
-
-        if batch > 0 or self.__delta != delta:
-            self.__delta = delta
-        step = 1. / self.__glsl.fps
-
-        images = []
-        vars = {}
-        batch = max(1, batch)
+            self.__glsl = GLSLShader(self, vertex, fragment)
 
         for k, var in variables.items():
-            if isinstance(var, (torch.Tensor)):
-                batch = max(batch, var.shape[0])
-                var = [image_convert(tensor2cv(v), 4) for v in var]
-            elif isinstance(var, (list, )):
-                batch = max(batch, len(var))
             variables[k] = var if isinstance(var, (list, )) else [var]
 
-        # if there are input images, use the first one we come across as the w,h requirement
-        # unless there is an explcit override?
-        firstImage = None
-        pbar = ProgressBar(batch)
-        for idx in range(batch):
+        # if the batch == 0 then we want an automagic frame step
+        if batch == 0:
+            start_frame = iFrame[0]
+            for x in range(len(batch)):
+                iFrame.append(start_frame + x)
+            iTime = [frame/rate for (frame, rate) in list(zip_longest_fill(iFrame, iFrameRate))]
+        else:
+            iTime = [iFrame[0] / iFrameRate[0]]
+
+        images = []
+        params = list(zip_longest_fill(batch, iTime, iFrame, iResolution, bgcolor))
+        pbar = ProgressBar(len(params))
+        for idx, (batch, iTime, iFrame, iResolution, bgcolor) in enumerate(params):
+            vars = {}
+            firstImage = None
             for k, val in variables.items():
                 vars[k] = val[idx % len(val)]
-                if firstImage is None and 'WH' not in self.CONTROL and isinstance(vars[k], (np.ndarray,)):
-                    firstImage = vars[k].shape[:2][::-1]
+                # convert images, grab first one if no sizes provided
+                if isinstance(vars[k], (torch.Tensor,)):
+                    vars[k] = vars[k][idx % len(val)]
+                    vars[k] = image_convert(tensor2cv(vars[k]), 4)
+                    if firstImage is None and 'WH' not in self.CONTROL:
+                        firstImage = True #vars[k].shape[:2][::-1]
+                        iResolution = vars[k].shape[:2][::-1]
 
-            self.__glsl.size = wihi if firstImage is None else firstImage
-            img = self.__glsl.render(self.__delta, **vars)
-            images.append(cv2tensor_full(img, matte))
-            self.__delta += step
+            vars['bgcolor'] = bgcolor
+
+            img = self.__glsl.render(iTime, iFrame, iResolution, **vars)
+            images.append(cv2tensor_full(img, bgcolor))
+
+            # self.__delta += self.__glsl.step
             comfy_message(ident, "jovi-glsl-time", {"id": ident, "t": self.__delta})
             pbar.update_absolute(idx)
         return [torch.stack(i) for i in zip(*images)]

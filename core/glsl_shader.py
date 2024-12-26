@@ -13,8 +13,9 @@ import numpy as np
 import OpenGL.GL as gl
 from loguru import logger
 
-from Jovi_GLSL.core import IMAGE_SIZE_MIN, PROG_VERTEX, PROG_FRAGMENT, \
-    PROG_FOOTER, PROG_HEADER, PTYPE, RE_VARIABLE, CompileException, \
+from Jovi_GLSL.core import IMAGE_SIZE_MAX, IMAGE_SIZE_MIN, PROG_VERTEX, PROG_FRAGMENT, \
+    PROG_FOOTER, PROG_HEADER, PTYPE, RE_VARIABLE, \
+    CompileException, \
     image_convert, parse_value
 
 from Jovi_GLSL.core.glsl_manager import GLSLManager
@@ -22,9 +23,6 @@ from Jovi_GLSL.core.glsl_manager import GLSLManager
 # ==============================================================================
 # === CONSTANT ===
 # ==============================================================================
-
-IMAGE_SIZE_DEFAULT: int = 512
-IMAGE_SIZE_MAX: int = 16384
 
 LAMBDA_UNIFORM = {
     'bool': gl.glUniform1i,
@@ -73,17 +71,11 @@ class EnumGLSLColorConvert(Enum):
 # ==============================================================================
 
 class GLSLShader:
-    """
-    """
-
-    def __init__(self, node, vertex:str=None, fragment:str=None, width:int=IMAGE_SIZE_DEFAULT, height:int=IMAGE_SIZE_DEFAULT, fps:int=30) -> None:
+    def __init__(self, node, vertex:str=None, fragment:str=None) -> None:
         self.__glsl_manager = GLSLManager()
         self.__glsl_manager.register_shader(node, self)
 
-        self.__size: Tuple[int, int] = (max(width, IMAGE_SIZE_MIN), max(height, IMAGE_SIZE_MIN))
-        self.__runtime: float = 0
-        self.__fps: int = min(120, max(1, fps))
-        self.__mouse: Tuple[int, int] = (0, 0)
+        self.__size: Tuple[int, int] = (IMAGE_SIZE_MIN, IMAGE_SIZE_MIN)
         self.__bgcolor = (0, 0, 0, 1.)
         self.__textures = {}
         self.__uniform_state = {}
@@ -92,7 +84,6 @@ class GLSLShader:
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
         self.__window = glfw.create_window(self.__size[0], self.__size[1], "hidden", None, None)
         if not self.__window:
-            # glfw.terminate()
             raise RuntimeError("GLFW did not init window")
         logger.debug("window created")
 
@@ -164,8 +155,6 @@ class GLSLShader:
                 if (val := gl.glGetUniformLocation(self.__program, s)) > -1:
                     self.__shaderVar[s] = val
 
-            if (resolution := self.__shaderVar.get('iResolution', -1)) > -1:
-                gl.glUniform3f(resolution, self.__size[0], self.__size[1], 0)
             logger.debug("uniforms initialized")
 
             # Setup user variables
@@ -188,29 +177,6 @@ class GLSLShader:
         except Exception as e:
             self.__cleanup()
             raise CompileException(f"shader compilation failed: {str(e)}")
-
-    def __update_framebuffer_size(self) -> None:
-        """Update framebuffer and texture sizes without recreating them"""
-        glfw.make_context_current(self.__window)
-        glfw.set_window_size(self.__window, self.__size[0], self.__size[1])
-
-        # Bind existing FBO and texture
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.__fbo_texture)
-
-        # Update sizes
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F,
-                       self.__size[0], self.__size[1], 0,
-                       gl.GL_RGBA, gl.GL_FLOAT, None)
-        gl.glViewport(0, 0, self.__size[0], self.__size[1])
-
-        # Update internal buffers
-        if self.__empty_image.shape != (self.__size[0], self.__size[1]):
-            self.__empty_image = np.zeros((self.__size[0], self.__size[1]), np.uint8)
-            self.__last_frame = np.zeros((self.__size[0], self.__size[1]), np.uint8)
-
-        # Clear texture hashes to force texture updates at new size
-        self.__texture_hashes.clear()
 
     def __cleanup(self):
         """Explicit cleanup of OpenGL resources"""
@@ -255,95 +221,58 @@ class GLSLShader:
         except:
             pass
 
-    @property
-    def size(self) -> Tuple[int, int]:
-        return self.__size
-
-    @size.setter
-    def size(self, size: Tuple[int, int]) -> None:
-        sz = (min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, size[0])),
-              min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, size[1])))
-
-        if sz[0] != self.__size[0] or sz[1] != self.__size[1]:
-            self.__size = sz
-            self.__update_framebuffer_size()
-            logger.debug(f"size set {sz} ==> {self.__size}")
-
-            # Update resolution uniform
-            if (rez := self.__shaderVar.get('iResolution', -1)) > -1:
-                glfw.make_context_current(self.__window)
-                gl.glUseProgram(self.__program)
-                gl.glUniform3f(rez, self.__size[0], self.__size[1], 0)
-
-    @property
-    def runtime(self) -> float:
-        return self.__runtime
-
-    @runtime.setter
-    def runtime(self, runtime:float) -> None:
-        runtime = max(0, runtime)
-        self.__runtime = runtime
-
-    @property
-    def fps(self) -> int:
-        return self.__fps
-
-    @fps.setter
-    def fps(self, fps:int) -> None:
-        fps = max(1, min(120, int(fps)))
-        self.__fps = fps
-        if (iFrameRate := self.__shaderVar.get('iFrameRate', -1)) > -1:
-            glfw.make_context_current(self.__window)
-            gl.glUseProgram(self.__program)
-            gl.glUniform1f(self.__shaderVar['iFrameRate'], iFrameRate)
-
-    @property
-    def mouse(self) -> Tuple[int, int]:
-        return self.__mouse
-
-    @mouse.setter
-    def mouse(self, pos:Tuple[int, int]) -> None:
-        self.__mouse = pos
-
-    @property
-    def frame(self) -> float:
-        return int(self.__runtime * self.__fps)
-
-    @property
-    def last_frame(self) -> float:
-        return self.__last_frame
-
-    @property
-    def bgcolor(self) -> Tuple[int, ...]:
-        return self.__bgcolor
-
-    @bgcolor.setter
-    def bgcolor(self, color:Tuple[int, ...]) -> None:
-        self.__bgcolor = tuple(float(x) / 255. for x in color)
-
-    def render(self, time_delta:float=0.,
+    def render(self, iTime:float=0., iFrame:int=0,
+               iResolution:Tuple[float,...]=(IMAGE_SIZE_MIN, IMAGE_SIZE_MIN),
                tile_edge:Tuple[EnumEdgeWrap,...]=(EnumEdgeWrap.CLAMP, EnumEdgeWrap.CLAMP),
                **kw) -> np.ndarray:
 
         glfw.make_context_current(self.__window)
         gl.glUseProgram(self.__program)
 
-        self.runtime = time_delta
-
         # current time in shader lifetime
         if (val := self.__shaderVar.get('iTime', -1)) > -1:
-            gl.glUniform1f(val, self.__runtime)
-
-        # the desired FPS
-        if (val := self.__shaderVar.get('iFrameRate', -1)) > -1:
-            gl.glUniform1i(val, self.__fps)
+            gl.glUniform1f(val, iTime)
 
         # the current frame based on the life time and "fps"
         if (val := self.__shaderVar.get('iFrame', -1)) > -1:
-            gl.glUniform1i(val, self.frame)
+            gl.glUniform1i(val, iFrame)
+
+        if iResolution[0] != self.__size[0] or iResolution[1] != self.__size[1]:
+            iResolution = (
+                min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, iResolution[0])),
+                min(IMAGE_SIZE_MAX, max(IMAGE_SIZE_MIN, iResolution[1]))
+            )
+
+            """Update framebuffer and texture sizes without recreating them"""
+            glfw.make_context_current(self.__window)
+            glfw.set_window_size(self.__window, iResolution[0], iResolution[1])
+
+            # Bind existing FBO and texture
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.__fbo)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.__fbo_texture)
+
+            # Update sizes
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F,
+                        iResolution[0], iResolution[1], 0,
+                        gl.GL_RGBA, gl.GL_FLOAT, None)
+            gl.glViewport(0, 0, iResolution[0], iResolution[1])
+
+            # Update internal buffers
+            if self.__empty_image.shape != (iResolution[0], iResolution[1]):
+                self.__empty_image = np.zeros((iResolution[0], iResolution[1]), np.uint8)
+                self.__last_frame = np.zeros((iResolution[0], iResolution[1]), np.uint8)
+
+            # Clear texture hashes to force texture updates at new size
+            self.__texture_hashes.clear()
+
+            logger.debug(f"iResolution {self.__size} ==> {iResolution}")
+            self.__size = iResolution
+
+            if (rez := self.__shaderVar.get('iResolution', -1)) > -1:
+                glfw.make_context_current(self.__window)
+                gl.glUniform3f(rez, self.__size[0], self.__size[1], 0)
 
         texture_index = -1
-
         for uk, uv in self.__userVar.items():
             p_type, p_loc, p_value, texture_id = uv
             val = kw.get(uk, p_value)
@@ -367,6 +296,7 @@ class GLSLShader:
 
                 if uk not in self.__texture_hashes or self.__texture_hashes[uk] != current_hash:
                     val = image_convert(val, 4)
+                    print(val.shape)
                     val = val[::-1,:]
                     val = val.astype(np.float32) / 255.0
                     val = cv2.resize(val, self.__size, interpolation=cv2.INTER_LINEAR)

@@ -30,7 +30,7 @@ class VECTOR2Node(JOVBaseNode):
 
 class VECTOR2INode(JOVBaseNode):
     NAME = "VECTOR2 INTEGER (JOV_GL)"
-    RETURN_TYPES = ("VEC2I", )
+    RETURN_TYPES = ("VEC2INT", )
     RETURN_NAMES = ("VEC2I", )
     DESCRIPTION = """
 
@@ -73,7 +73,7 @@ class VECTOR3Node(JOVBaseNode):
 
 class VECTOR3INode(JOVBaseNode):
     NAME = "VECTOR3 INTEGER (JOV_GL)"
-    RETURN_TYPES = ("VEC3", )
+    RETURN_TYPES = ("VEC3INT", )
     RETURN_NAMES = ("VEC3", )
     DESCRIPTION = """
 
@@ -110,6 +110,29 @@ class VECTOR4Node(JOVBaseNode):
                 "y": ("FLOAT", { "default": 0.0, "step": 0.01, "min": -sys.maxsize, "max": sys.maxsize }),
                 "z": ("FLOAT", { "default": 0.0, "step": 0.01, "min": -sys.maxsize, "max": sys.maxsize }),
                 "w": ("FLOAT", { "default": 0.0, "step": 0.01, "min": -sys.maxsize, "max": sys.maxsize }),
+            }
+        }
+
+    def run(self, x, y, z, w):
+        return ((x, y, z, w), )
+
+class VECTOR4INode(JOVBaseNode):
+    NAME = "VECTOR4 INTEGER (JOV_GL)"
+    RETURN_TYPES = ("VEC4INT", )
+    RETURN_NAMES = ("VEC4", )
+    DESCRIPTION = """
+
+"""
+    SORT = 10055
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "x": ("INT", { "default": 0, "step": 1, "min": -sys.maxsize, "max": sys.maxsize }),
+                "y": ("INT", { "default": 0, "step": 1, "min": -sys.maxsize, "max": sys.maxsize }),
+                "z": ("INT", { "default": 0, "step": 1, "min": -sys.maxsize, "max": sys.maxsize }),
+                "w": ("INT", { "default": 0, "step": 1, "min": -sys.maxsize, "max": sys.maxsize }),
             }
         }
 

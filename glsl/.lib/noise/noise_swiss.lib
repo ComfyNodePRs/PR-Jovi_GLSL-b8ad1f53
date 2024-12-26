@@ -1,0 +1,17 @@
+#ifndef LIB_NOISE_SWISS
+#define LIB_NOISE_SWISS
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// SWISS NOISE
+//------------------------------------------------------------------------------
+
+// Swiss noise (multiplies different frequencies)
+float noise_swiss(vec2 p, float scale) {
+    float noise1 = noise_perlin(p);
+    float noise2 = noise_perlin(p * scale);
+    return noise1 * noise2;
+}
+
+#endif

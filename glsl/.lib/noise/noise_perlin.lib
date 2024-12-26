@@ -1,0 +1,68 @@
+#ifndef LIB_NOISE_PERLIN
+#define LIB_NOISE_PERLIN
+
+#include .lib/noise/noise_rand.lib
+
+//------------------------------------------------------------------------------
+// NOISE PERLIN
+//------------------------------------------------------------------------------
+
+// Generate 2D Perlin noise
+float noise_perlin(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = smoothstep(0.,1.,f);
+
+    float a = noise_rand(i);
+    float b = noise_rand(i + vec2(1.0, 0.0));
+    float c = noise_rand(i + vec2(0.0, 1.0));
+    float d = noise_rand(i + vec2(1.0, 1.0));
+
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// 3D Perlin Noise function
+float noise_perlin(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = smoothstep(0.,1.,f);
+
+    float a = noise_rand(i);
+    float b = noise_rand(i + vec3(1.0, 0.0, 0.0));
+    float c = noise_rand(i + vec3(0.0, 1.0, 0.0));
+    float d = noise_rand(i + vec3(1.0, 1.0, 0.0));
+    float e = noise_rand(i + vec3(0.0, 0.0, 1.0));
+    float f0 = noise_rand(i + vec3(1.0, 0.0, 1.0));
+    float g0 = noise_rand(i + vec3(0.0, 1.0, 1.0));
+    float h0 = noise_rand(i + vec3(1.0, 1.0, 1.0));
+
+    return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), mix(mix(e, f0, u.x), mix(g0, h0, u.x), u.y), u.z);
+}
+
+// 4D Perlin Noise function
+float noise_perlin(vec4 p) {
+    vec4 i = floor(p);
+    vec4 f = fract(p);
+    vec4 u = smoothstep(0.,1.,f);
+
+    float a = noise_rand(i);
+    float b = noise_rand(i + vec4(1.0, 0.0, 0.0, 0.0));
+    float c = noise_rand(i + vec4(0.0, 1.0, 0.0, 0.0));
+    float d = noise_rand(i + vec4(1.0, 1.0, 0.0, 0.0));
+    float e = noise_rand(i + vec4(0.0, 0.0, 1.0, 0.0));
+    float f0 = noise_rand(i + vec4(1.0, 0.0, 1.0, 0.0));
+    float g0 = noise_rand(i + vec4(0.0, 1.0, 1.0, 0.0));
+    float h0 = noise_rand(i + vec4(1.0, 1.0, 1.0, 0.0));
+    float i1 = noise_rand(i + vec4(0.0, 0.0, 0.0, 1.0));
+    float j1 = noise_rand(i + vec4(1.0, 0.0, 0.0, 1.0));
+    float k1 = noise_rand(i + vec4(0.0, 1.0, 0.0, 1.0));
+    float l1 = noise_rand(i + vec4(1.0, 1.0, 0.0, 1.0));
+    float m1 = noise_rand(i + vec4(0.0, 0.0, 1.0, 1.0));
+    float n1 = noise_rand(i + vec4(1.0, 0.0, 1.0, 1.0));
+    float o1 = noise_rand(i + vec4(0.0, 1.0, 1.0, 1.0));
+    float p1 = noise_rand(i + vec4(1.0, 1.0, 1.0, 1.0));
+
+    return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), mix(mix(e, f0, u.x), mix(g0, h0, u.x), u.y), u.z);
+}
+
+#endif

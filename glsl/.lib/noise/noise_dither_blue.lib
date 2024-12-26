@@ -1,0 +1,23 @@
+#ifndef LIB_NOISE_DITHER_BLUE
+#define LIB_NOISE_DITHER_BLUE
+
+#include .lib/noise/noise_blue.lib
+
+//------------------------------------------------------------------------------
+// BLUE NOISE DITHER
+//------------------------------------------------------------------------------
+
+// Improved blue noise dithering
+vec3 noise_dither_blue(vec3 color, vec2 uv, float strength) {
+    float noise = noise_blue(uv);
+    return color + (noise - 0.5) * strength;
+}
+
+// Quantized dithering with blue noise
+vec3 noise_dither_blue_quantized(vec3 color, vec2 uv, float levels) {
+    float noise = noise_blue(uv);
+    vec3 quantized = floor(color * levels + (noise - 0.5)) / levels;
+    return clamp(quantized, 0.0, 1.0);
+}
+
+#endif

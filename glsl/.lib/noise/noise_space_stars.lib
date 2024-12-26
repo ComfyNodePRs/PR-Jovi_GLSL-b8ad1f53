@@ -1,0 +1,35 @@
+#ifndef LIB_NOISE_SPACE_STARS
+#define LIB_NOISE_SPACE_STARS
+
+#include .lib/noise/noise_rand.lib
+
+//------------------------------------------------------------------------------
+// SPACE NOISE
+//------------------------------------------------------------------------------
+
+// Star field noise (creates points of light)
+float noise_stars(vec2 p, float density, float size) {
+    vec2 cell = floor(p);
+    vec2 local = fract(p);
+
+    float minDist = 1.0;
+
+    for(int y = -1; y <= 1; y++) {
+        for(int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(float(x), float(y));
+            vec2 neighbor = cell + offset;
+
+            float rand = noise_rand(neighbor);
+            if(rand > (1.0 - density)) {
+                vec2 pos = offset + vec2(noise_rand(neighbor * 49.0),
+                                      noise_rand(neighbor * 73.0));
+                float dist = length(local - pos);
+                minDist = min(minDist, dist);
+            }
+        }
+    }
+
+    return smoothstep(size, 0.0, minDist);
+}
+
+#endif

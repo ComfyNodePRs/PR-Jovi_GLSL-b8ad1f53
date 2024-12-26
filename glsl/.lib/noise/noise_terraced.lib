@@ -1,0 +1,16 @@
+#ifndef LIB_NOISE_TERRACED
+#define LIB_NOISE_TERRACED
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// TERRACED NOISE
+//------------------------------------------------------------------------------
+
+// Terraced noise for plateaus
+float noise_terraced(vec2 p, float steps) {
+    float noise = noise_perlin(p);
+    return floor(noise * steps) / steps;
+}
+
+#endif

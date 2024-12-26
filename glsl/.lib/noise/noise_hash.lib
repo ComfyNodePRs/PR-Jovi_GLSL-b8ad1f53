@@ -1,0 +1,29 @@
+#ifndef LIB_NOISE_HASH
+#define LIB_NOISE_HASH
+
+//------------------------------------------------------------------------------
+// HASH NOISE
+//------------------------------------------------------------------------------
+
+// Basic 1D hash - maps float to float [0,1]
+float noise_hash11(float p) {
+    p = fract(p * .1031);
+    p *= p + 33.33;
+    return fract(p * p);
+}
+
+// 2D to 1D hash - maps vec2 to float [0,1]
+float noise_hash21(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * .1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+// 3D to 3D hash - maps vec3 to vec3 [0,1]
+vec3 noise_hash33(vec3 p) {
+    p = fract(p * vec3(443.8975, 397.2973, 491.1871));
+    p += dot(p.zxy, p.yxz + 19.19);
+    return fract(vec3(p.x * p.y, p.y * p.z, p.z * p.x));
+}
+
+#endif

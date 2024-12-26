@@ -1,0 +1,18 @@
+#ifndef LIB_NOISE_SPIRAL
+#define LIB_NOISE_SPIRAL
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// SPIRAL NOISE
+//------------------------------------------------------------------------------
+
+// Creates spiral noise pattern
+float noise_spiral(vec2 p, float arms, float spin) {
+    float angle = atan(p.y, p.x);
+    float dist = length(p);
+    float spiral = noise_perlin(vec2(dist * arms + angle * spin, dist));
+    return spiral;
+}
+
+#endif

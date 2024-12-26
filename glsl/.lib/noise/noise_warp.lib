@@ -1,0 +1,34 @@
+#ifndef LIB_NOISE_WARP
+#define LIB_NOISE_WARP
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// DOMAIN WARPING
+//------------------------------------------------------------------------------
+
+float noise_warp(vec2 p, float strength) {
+    vec2 q = vec2(
+        noise_perlin(p + vec2(0.0, 0.0)),
+        noise_perlin(p + vec2(5.2, 1.3))
+    );
+
+    vec2 r = vec2(
+        noise_perlin(p + strength * q + vec2(1.7, 9.2)),
+        noise_perlin(p + strength * q + vec2(8.3, 2.8))
+    );
+
+    return noise_perlin(p + strength * r);
+}
+
+vec3 noise_warp3D(vec3 p, float strength) {
+    vec3 q = vec3(
+        noise_perlin(vec3(p.x, p.y, p.z)),
+        noise_perlin(vec3(p.x + 5.2, p.y + 1.3, p.z + 2.1)),
+        noise_perlin(vec3(p.x + 1.7, p.y + 9.2, p.z + 3.5))
+    );
+
+    return q * strength;
+}
+
+#endif

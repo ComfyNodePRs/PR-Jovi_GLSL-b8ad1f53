@@ -1,0 +1,25 @@
+#ifndef LIB_NOISE_RAND
+#define LIB_NOISE_RAND
+
+//------------------------------------------------------------------------------
+// RANDOM VALUE GENERATORS
+// These functions generate pseudo-random values using different input dimensions
+//------------------------------------------------------------------------------
+
+float noise_rand(float x) {
+    return fract(sin(x * 12.9898) * 43758.5453);
+}
+
+float noise_rand(vec2 co) {
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+float noise_rand(vec3 co) {
+    return fract(sin(dot(co, vec3(12.9898, 78.233, 45.678))) * 43758.5453123);
+}
+
+float noise_rand(vec4 co) {
+    return fract(sin(dot(co, vec4(12.9898, 78.233, 45.678, 94.673))) * 43758.5453123);
+}
+
+#endif

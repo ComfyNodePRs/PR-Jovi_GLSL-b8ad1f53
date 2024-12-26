@@ -1,0 +1,18 @@
+#ifndef LIB_NOISE_FLOW
+#define LIB_NOISE_FLOW
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// FLOW NOISE
+//------------------------------------------------------------------------------
+
+float noise_flow(vec2 p, float time, float strength) {
+    vec2 flow = vec2(
+        noise_perlin(vec2(p.x * 0.5 + time * 0.5, p.y * 0.5)),
+        noise_perlin(vec2(p.x * 0.5 + 40.0 + time * 0.5, p.y * 0.5 + 40.0))
+    );
+    return noise_perlin(p + flow * strength);
+}
+
+#endif

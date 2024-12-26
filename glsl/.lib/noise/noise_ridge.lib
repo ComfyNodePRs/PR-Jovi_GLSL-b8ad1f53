@@ -1,0 +1,33 @@
+#ifndef LIB_NOISE_RIDGE
+#define LIB_NOISE_RIDGE
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// RIDGE NOISE
+//------------------------------------------------------------------------------
+
+float noise_ridge(vec2 p, float offset) {
+    float n = noise_perlin(p);
+    n = abs(n);     // Create creases
+    n = offset - n; // Invert so creases are at top
+    n = n * n;      // Sharpen creases
+    return n;
+}
+
+float noise_ridgeMult(vec2 p, float frequency, float lacunarity, float gain, int octaves) {
+    float sum = 0.0;
+    float amp = 0.5;
+    float prev = 1.0;
+
+    for(int i = 0; i < octaves; i++) {
+        float n = noise_ridge(p * frequency, 1.0);
+        sum += n * amp * prev;
+        prev = n;
+        frequency *= lacunarity;
+        amp *= gain;
+    }
+    return sum;
+}
+
+#endif

@@ -1,0 +1,85 @@
+#ifndef LIB_NOISE_VORONOI
+#define LIB_NOISE_VORONOI
+
+#include .lib/noise/noise_rand.lib
+
+//------------------------------------------------------------------------------
+// VORONOI NOISE
+//------------------------------------------------------------------------------
+
+// Voronoi noise function for 2D
+vec2 noise_voronoi(vec2 p) {
+    vec2 n = floor(p);
+    vec2 f = fract(p);
+
+    vec2 m = vec2(8.0);
+    for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = vec2(noise_rand(n + g));
+            vec2 r = g + o - f;
+            float d = dot(r, r);
+            if (d < m.x) {
+                m.y = m.x;
+                m.x = d;
+            } else if (d < m.y) {
+                m.y = d;
+            }
+        }
+    }
+    return sqrt(m);
+}
+
+// Voronoi noise function for 3D
+vec2 noise_voronoi(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+
+    float min_dist = 1.0;
+    vec3 nearest_point = vec3(0.0);
+
+    for (float x = -1.0; x <= 1.0; x++) {
+        for (float y = -1.0; y <= 1.0; y++) {
+            for (float z = -1.0; z <= 1.0; z++) {
+                vec3 neighbor = i + vec3(x, y, z);
+                vec3 diff = neighbor - f;
+                float dist = length(diff);
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    nearest_point = neighbor;
+                }
+            }
+        }
+    }
+
+    return vec2(min_dist, length(nearest_point - f));
+}
+
+// Voronoi noise function for 4D
+vec2 noise_voronoi(vec4 p) {
+    vec4 i = floor(p);
+    vec4 f = fract(p);
+
+    float min_dist = 1.0;
+    vec4 nearest_point = vec4(0.0);
+
+    for (float x = -1.0; x <= 1.0; x++) {
+        for (float y = -1.0; y <= 1.0; y++) {
+            for (float z = -1.0; z <= 1.0; z++) {
+                for (float w = -1.0; w <= 1.0; w++) {
+                    vec4 neighbor = i + vec4(x, y, z, w);
+                    vec4 diff = neighbor - f;
+                    float dist = length(diff);
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                        nearest_point = neighbor;
+                    }
+                }
+            }
+        }
+    }
+
+    return vec2(min_dist, length(nearest_point - f));
+}
+
+#endif

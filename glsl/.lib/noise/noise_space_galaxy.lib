@@ -1,0 +1,20 @@
+#ifndef LIB_NOISE_SPACE_GALAXY
+#define LIB_NOISE_SPACE_GALAXY
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// SPACE NOISE
+//------------------------------------------------------------------------------
+
+// Galaxy-like spiral noise
+float noise_galaxy(vec2 p, float arms, float twist, float chaos) {
+    float angle = atan(p.y, p.x);
+    float dist = length(p);
+    float arm_factor = (angle * arms + dist * twist) / (2.0 * M_PI);
+    float base = fract(arm_factor);
+    float noise = noise_perlin(p * chaos);
+    return smoothstep(0.5, 0.0, abs(base - 0.5) + noise * 0.3);
+}
+
+#endif

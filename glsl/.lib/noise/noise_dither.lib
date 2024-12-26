@@ -1,0 +1,17 @@
+#ifndef LIB_NOISE_DITHER
+#define LIB_NOISE_DITHER
+
+#include .lib/noise/noise_perlin.lib
+
+//------------------------------------------------------------------------------
+// DITHERED NOISE
+//------------------------------------------------------------------------------
+
+// Dithered noise
+float noise_dither(vec2 p) {
+    float base = noise_perlin(p);
+    float dither = fract(sin(dot(floor(p), vec2(12.9898, 78.233))) * 43758.5453123);
+    return base + dither * 0.5;
+}
+
+#endif

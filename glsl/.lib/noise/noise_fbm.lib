@@ -1,0 +1,56 @@
+#ifndef LIB_NOISE_FBM
+#define LIB_NOISE_FBM
+
+#include .lib/noise/noise_rand.lib
+
+//------------------------------------------------------------------------------
+// FRACTAL BROWNIAN MOTION (FBM)
+// Layered noise function for natural-looking patterns
+//------------------------------------------------------------------------------
+
+float noise_fbm(vec2 x, float H, int octaves) {
+    float G = exp2(-H);
+    float f = 1.0;
+    float a = 1.0;
+    float t = 0.0;
+
+    octaves = min(octaves, MAX_OCTAVES);
+    for(int i=0; i < octaves; i++) {
+        t += a * noise_rand(f*x);
+        f *= 2.0;
+        a *= G;
+    }
+    return t;
+}
+
+float noise_fbm(vec3 x, float H, int octaves) {
+    float G = exp2(-H);
+    float f = 1.0;
+    float a = 1.0;
+    float t = 0.0;
+
+    octaves = min(octaves, MAX_OCTAVES);
+    for(int i=0; i<octaves; i++) {
+        t += a * noise_rand(f*x);
+        f *= 2.0;
+        a *= G;
+    }
+    return t;
+}
+
+float noise_fbm(vec4 x, float H, int octaves) {
+    float G = exp2(-H);
+    float f = 1.0;
+    float a = 1.0;
+    float t = 0.0;
+
+    octaves = min(octaves, MAX_OCTAVES);
+    for(int i=0; i<octaves; i++) {
+        t += a * noise_rand(f*x);
+        f *= 2.0;
+        a *= G;
+    }
+    return t;
+}
+
+#endif

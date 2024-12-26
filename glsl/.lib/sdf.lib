@@ -5,28 +5,38 @@
 // SIGNED DISTANCE
 //------------------------------------------------------------------------------
 
-float sdf_polygon2D(vec2 p, vec2 center, float radius, int sides, float starFactor);
-float sdf_star2D(vec2 p, float r, float t);
-float sdf_heart2D(vec2 p);
-float sdf_ellipse2D(vec2 p, vec2 radii);
-float sdf_circle2D(vec2 p, float r);
+float sdf_box(vec2 p, vec2 radius);
+float sdf_box(vec3 p, vec3 radius);
+float sdf_box(vec4 p, vec4 radius);
+float sdf_sphere(vec3 p, float r);
+float sdf_cylinder(vec3 p, float r, float h);
+float sdf_polygon(vec2 p, vec2 center, float r, int sides, float starFactor);
+float sdf_ellipse(vec2 p, vec2 radii);
+float sdf_circle(vec2 p, float r);
+float sdf_star(vec2 p, float r, float t);
+float sdf_heart(vec2 p);
 
 //------------------------------------------------------------------------------
 // SUPPORT FUNCTIONS
 //------------------------------------------------------------------------------
 
+vec3 sdf_repeat(vec3 p, vec3 c);
 float sdf_union(float d1, float d2);
-float sdf_subtract(float d1, float d2);
-float sdf_round(vec2 s, float r);
+float sdf_unionSmooth(float a, float b, float k);
+float sdf_intersection(float d1, float d2);
+float sdf_difference(float d1, float d2);
 float sdf_hollow(vec2 s, float thickness);
 vec3 sdf_hollow(vec3 shape, float r);
+float sdf_displacement(vec3 p);
+vec3 sdf_twist(vec3 p, float a);
+float sdf_dist_field(vec3 p);
+vec3 sdf_gradient(vec3 pos);
+
+bool ray_intersection_aabb(vec3 o, vec3 dir, vec3 bmin, vec3 bmax, inout vec2 e);
+bool ray_marching(vec3 o, vec3 dir, inout float depth, inout vec3 n);
 
 //------------------------------------------------------------------------------
 // SHAPE
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-// CUBE
 //------------------------------------------------------------------------------
 
 // Signed distance box of size radius
@@ -142,11 +152,11 @@ float sdf_difference(float d1, float d2) {
     return max(d1, -d2);
 }
 
-float sdf_hollow2(vec2 s, float thickness) {
+float sdf_hollow(vec2 s, float thickness) {
     return abs(s) - thickness;
 }
 
-vec3 sdf_hollow3(vec3 shape, float r) {
+vec3 sdf_hollow(vec3 shape, float r) {
     return vec3(abs(shape.x) - r, sign(shape.x) * shape.yz);
 }
 
@@ -164,30 +174,15 @@ vec3 sdf_twist(vec3 p, float a) {
 }
 
 //------------------------------------------------------------------------------
-// RAY INTERSECTION
-//------------------------------------------------------------------------------
-
-// Computes ray-box intersection and returns true if intersection occurs
-bool intersection_aabb(vec3 o, vec3 dir, vec3 bmin, vec3 bmax, inout vec2 e) {
-    vec3 a = (bmin - o) / dir;
-    vec3 b = (bmax - o) / dir;
-    vec3 s = min(a, b);
-    vec3 t = max(a, b);
-    e.x = max(max(s.x, s.y), max(s.z, e.x));
-    e.y = max(min(t.x, t.y), max(t.z, e.y));
-    return e.x < e.y;
-}
-
-//------------------------------------------------------------------------------
 // DISTANCE FIELD
 //------------------------------------------------------------------------------
 
 // Computes the distance field for a given point
 // Optionally applies transformations and combines multiple distance functions
-float dist_field(vec3 p) {
+float sdf_dist_field(vec3 p) {
     // Uncomment transformations to apply
-    // p = sdRep(p, vec3(4.0));
-    // p = sdTwist(p, 3.0);
+    // p = sdf_repeat(p, vec3(4.0));
+    // p = sdf_twist(p, 3.0);
 
     // Compute distances to box and sphere
     float d0 = sdf_box(p, vec3(0.5));
@@ -197,17 +192,16 @@ float dist_field(vec3 p) {
     return sdf_intersection(d1, d0);
 
     // Optionally include displacement and smooth union
-    // return d + sfDisp(p * 2.5);
-    // return sdUnion_s(d + sfDisp(p * 2.5 * sin(iTime * 1.01)), d1, 0.1);
+    // return d + sdf_displacement(p * 2.5);
+    // return sdf_unionSmooth(d + sdf_displacement(p * 2.5 * sin(iTime * 1.01)), d1, 0.1);
 }
-
 
 //------------------------------------------------------------------------------
 // GRADIENT FUNCTION
 //------------------------------------------------------------------------------
 
 // Computes the gradient of the distance field at a point
-vec3 gradient(vec3 pos) {
+vec3 sdf_gradient(vec3 pos) {
     const vec3 dx = vec3(grad_step, 0.0, 0.0);
     const vec3 dy = vec3(0.0, grad_step, 0.0);
     const vec3 dz = vec3(0.0, 0.0, grad_step);
@@ -221,8 +215,19 @@ vec3 gradient(vec3 pos) {
 }
 
 //------------------------------------------------------------------------------
-// RAY MARCHING
+// RAY SUPPORT
 //------------------------------------------------------------------------------
+
+// Computes ray-box intersection and returns true if intersection occurs
+bool ray_intersection_aabb(vec3 o, vec3 dir, vec3 bmin, vec3 bmax, inout vec2 e) {
+    vec3 a = (bmin - o) / dir;
+    vec3 b = (bmax - o) / dir;
+    vec3 s = min(a, b);
+    vec3 t = max(a, b);
+    e.x = max(max(s.x, s.y), max(s.z, e.x));
+    e.y = max(min(t.x, t.y), max(t.z, e.y));
+    return e.x < e.y;
+}
 
 // Performs ray marching to find the intersection with a distance field
 bool ray_marching(vec3 o, vec3 dir, inout float depth, inout vec3 n) {

@@ -1,7 +1,7 @@
 #ifndef LIB_NOISE_RIVER
 #define LIB_NOISE_RIVER
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 #include .lib/noise/noise_curl.lib
 
 //------------------------------------------------------------------------------
@@ -11,7 +11,7 @@
 // River network noise
 float noise_river(vec2 p, float width) {
     vec2 flow = noise_curl(p, 0.1);
-    float pattern = noise_perlin(p + flow);
+    float pattern = noise_simplex(p + flow);
     return smoothstep(-width, width, pattern);
 }
 

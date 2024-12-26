@@ -1,7 +1,7 @@
 #ifndef LIB_NOISE_CURL
 #define LIB_NOISE_CURL
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 
 //------------------------------------------------------------------------------
 // CURL NOISE
@@ -9,10 +9,10 @@
 
 // Curl noise for 2D vector field
 vec2 noise_curl(vec2 p, float epsilon) {
-    float n1 = noise_perlin(vec2(p.x, p.y + epsilon));
-    float n2 = noise_perlin(vec2(p.x, p.y - epsilon));
-    float n3 = noise_perlin(vec2(p.x + epsilon, p.y));
-    float n4 = noise_perlin(vec2(p.x - epsilon, p.y));
+    float n1 = noise_simplex(vec2(p.x, p.y + epsilon));
+    float n2 = noise_simplex(vec2(p.x, p.y - epsilon));
+    float n3 = noise_simplex(vec2(p.x + epsilon, p.y));
+    float n4 = noise_simplex(vec2(p.x - epsilon, p.y));
 
     float x = n1 - n2;
     float y = n4 - n3;

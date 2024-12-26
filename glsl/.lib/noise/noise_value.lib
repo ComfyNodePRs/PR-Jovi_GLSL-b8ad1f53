@@ -2,6 +2,7 @@
 #define LIB_NOISE_VALUE
 
 #include .lib/noise/noise_rand.lib
+#include .lib/noise/noise_params.lib
 
 //------------------------------------------------------------------------------
 // VALUE NOISE
@@ -46,11 +47,11 @@ float noise_value(vec4 p) {
     vec4 i = floor(p);
     vec4 f = fract(p);
 
-    float a  = noise_rand(i);
-    float b  = noise_rand(i + vec4(1.0, 0.0, 0.0, 0.0));
-    float c  = noise_rand(i + vec4(0.0, 1.0, 0.0, 0.0));
-    float d  = noise_rand(i + vec4(1.0, 1.0, 0.0, 0.0));
-    float e  = noise_rand(i + vec4(0.0, 0.0, 1.0, 0.0));
+    float a = noise_rand(i);
+    float b = noise_rand(i + vec4(1.0, 0.0, 0.0, 0.0));
+    float c = noise_rand(i + vec4(0.0, 1.0, 0.0, 0.0));
+    float d = noise_rand(i + vec4(1.0, 1.0, 0.0, 0.0));
+    float e = noise_rand(i + vec4(0.0, 0.0, 1.0, 0.0));
     float f0 = noise_rand(i + vec4(1.0, 0.0, 1.0, 0.0));
     float g0 = noise_rand(i + vec4(0.0, 1.0, 1.0, 0.0));
     float h0 = noise_rand(i + vec4(1.0, 1.0, 1.0, 0.0));
@@ -69,5 +70,27 @@ float noise_value(vec4 p) {
 
     return mix(v0, v1, u.w);
 }
+
+// Parameterized versions
+#define NOISE_VALUE(vec_type) float noise_value(vec_type p, NoiseParams params) { \
+    float value = 0.0; \
+    float frequency = params.frequency; \
+    float amplitude = params.amplitude; \
+    float maxValue = 0.0; \
+
+    for(int i = 0; i < min(params.octaves, MAX_OCTAVES); i++) { \
+        value += amplitude * noise_value(p * frequency); \
+        maxValue += amplitude; \
+        frequency *= params.lacunarity; \
+        amplitude *= params.persistence; \
+    } \
+
+    return value / maxValue; \
+}
+
+NOISE_VALUE(vec2)
+NOISE_VALUE(vec3)
+NOISE_VALUE(vec4)
+
 
 #endif

@@ -1,7 +1,7 @@
 #ifndef LIB_NOISE_HYBRID
 #define LIB_NOISE_HYBRID
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 #include .lib/noise/noise_voronoi.lib
 
 //------------------------------------------------------------------------------
@@ -10,7 +10,7 @@
 
 // Combines Perlin and Voronoi for organic patterns
 float noise_hybrid(vec2 p, float voronoiWeight) {
-    float perlin = noise_perlin(p);
+    float perlin = noise_simplex(p);
     vec2 voronoi = noise_voronoi(p * 2.0);
     return mix(perlin, voronoi.x, voronoiWeight);
 }

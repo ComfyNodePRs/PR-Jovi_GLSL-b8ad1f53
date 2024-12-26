@@ -1,7 +1,7 @@
 #ifndef LIB_NOISE_EROSION
 #define LIB_NOISE_EROSION
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 #include .lib/noise/noise_ridge.lib
 
 //------------------------------------------------------------------------------
@@ -10,7 +10,7 @@
 
 // Erosion-like noise
 float noise_erosion(vec2 p, float roughness) {
-    float base = noise_perlin(p);
+    float base = noise_simplex(p);
     float detail = noise_ridge(p * 4.0, 1.0);
     return base - detail * roughness;
 }

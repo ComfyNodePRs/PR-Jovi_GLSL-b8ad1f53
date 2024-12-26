@@ -5,7 +5,7 @@
 
 //------------------------------------------------------------------------------
 // FRACTAL BROWNIAN MOTION (FBM)
-// Layered noise function for natural-looking patterns
+// Smooth, natural-looking noise with additive octaves
 //------------------------------------------------------------------------------
 
 float noise_fbm(vec2 x, float H, int octaves) {
@@ -30,7 +30,7 @@ float noise_fbm(vec3 x, float H, int octaves) {
     float t = 0.0;
 
     octaves = min(octaves, MAX_OCTAVES);
-    for(int i=0; i<octaves; i++) {
+    for(int i=0; i < octaves; i++) {
         t += a * noise_rand(f*x);
         f *= 2.0;
         a *= G;
@@ -45,7 +45,7 @@ float noise_fbm(vec4 x, float H, int octaves) {
     float t = 0.0;
 
     octaves = min(octaves, MAX_OCTAVES);
-    for(int i=0; i<octaves; i++) {
+    for(int i=0; i < octaves; i++) {
         t += a * noise_rand(f*x);
         f *= 2.0;
         a *= G;

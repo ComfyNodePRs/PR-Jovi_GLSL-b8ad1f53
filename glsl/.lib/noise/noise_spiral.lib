@@ -1,7 +1,7 @@
 #ifndef LIB_NOISE_SPIRAL
 #define LIB_NOISE_SPIRAL
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 
 //------------------------------------------------------------------------------
 // SPIRAL NOISE
@@ -11,7 +11,7 @@
 float noise_spiral(vec2 p, float arms, float spin) {
     float angle = atan(p.y, p.x);
     float dist = length(p);
-    float spiral = noise_perlin(vec2(dist * arms + angle * spin, dist));
+    float spiral = noise_simplex(vec2(dist * arms + angle * spin, dist));
     return spiral;
 }
 

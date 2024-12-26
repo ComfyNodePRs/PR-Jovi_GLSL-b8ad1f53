@@ -1,50 +1,67 @@
 #ifndef LIB_NOISE_TURBULENCE
 #define LIB_NOISE_TURBULENCE
 
-#include .lib/noise/noise.lib
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
+#include .lib/noise/noise_params.lib
 
 //------------------------------------------------------------------------------
 // TURBULENCE NOISE
+// Sharper, more chaotic patterns with absolute values
 //------------------------------------------------------------------------------
 
 // Turbulence function using 2D Perlin noise
-float noise_turbulence(vec2 p, float size) {
+float noise_turbulence(vec2 p, NoiseParams params) {
     float value = 0.0;
-    float initial_size = size;
+    float frequency = params.frequency;
+    float amplitude = params.amplitude;
+    float maxValue = 0.0;
 
-    while (size >= 1.0) {
-        value += noise_perlin(p / size) * size;
-        size /= 2.0;
+    for(int i = 0; i < min(params.octaves, MAX_OCTAVES); i++) {
+        // Use absolute value of noise for sharper transitions
+        value += amplitude * abs(2.0 * noise_simplex(p * frequency) - 1.0);
+        maxValue += amplitude;
+        frequency *= params.lacunarity;
+        // Turbulence typically wants faster amplitude falloff
+        amplitude *= params.persistence * 0.8;
     }
 
-    return 0.5 * value / initial_size;
+    return value / maxValue;
 }
 
-// Turbulence function using 3D Perlin noise
-float noise_turbulence(vec3 p, float size) {
+float noise_turbulence(vec3 p, NoiseParams params) {
     float value = 0.0;
-    float initial_size = size;
+    float frequency = params.frequency;
+    float amplitude = params.amplitude;
+    float maxValue = 0.0;
 
-    while (size >= 1.0) {
-        value += noise_gradient(p / size) * size;
-        size /= 2.0;
+    for(int i = 0; i < min(params.octaves, MAX_OCTAVES); i++) {
+        // Use absolute value of noise for sharper transitions
+        value += amplitude * abs(2.0 * noise_simplex(p * frequency) - 1.0);
+        maxValue += amplitude;
+        frequency *= params.lacunarity;
+        // Turbulence typically wants faster amplitude falloff
+        amplitude *= params.persistence * 0.8;
     }
 
-    return 0.5 * value / initial_size;
+    return value / maxValue;
 }
 
-float noise_turbulence(vec4 p, float size) {
-    float total = 0.0;
-    float scale = 1.0;
+float noise_turbulence(vec4 p, NoiseParams params) {
+    float value = 0.0;
+    float frequency = params.frequency;
+    float amplitude = params.amplitude;
+    float maxValue = 0.0;
 
-    while (size > 1.0) {
-        total += abs(noise_gradient(p * scale)) / scale;
-        scale *= 2.0;
-        size /= 2.0;
+    for(int i = 0; i < min(params.octaves, MAX_OCTAVES); i++) {
+        // Use absolute value of noise for sharper transitions
+        value += amplitude * abs(2.0 * noise_simplex(p * frequency) - 1.0);
+        maxValue += amplitude;
+        frequency *= params.lacunarity;
+        // Turbulence typically wants faster amplitude falloff
+        amplitude *= params.persistence * 0.8;
     }
 
-    return total;
+    return value / maxValue;
 }
 
 #endif

@@ -4,82 +4,120 @@
 #include .lib/noise/noise_rand.lib
 
 //------------------------------------------------------------------------------
+// VORONOI PARAMETERS
+//------------------------------------------------------------------------------
+
+struct VoronoiParams {
+    float cellSize;     // Base size of cells (default: 1.0)
+    float jitter;       // How random are cell points (0-1)
+    int metric;         // Distance metric (0=Euclidean, 1=Manhattan, 2=Chebyshev)
+    bool invertOutput;  // Invert the output pattern
+    float borderWidth; // Width of cell borders (0 for no borders)
+};
+
+VoronoiParams defaultVoronoiParams() {
+    VoronoiParams params;
+    params.cellSize = 1.0;
+    params.jitter = 1.0;
+    params.metric = 0;
+    params.invertOutput = false;
+    params.borderWidth = 0.0;
+    return params;
+}
+
+//------------------------------------------------------------------------------
 // VORONOI NOISE
 //------------------------------------------------------------------------------
 
-// Voronoi noise function for 2D
-vec2 noise_voronoi(vec2 p) {
-    vec2 n = floor(p);
-    vec2 f = fract(p);
+// Helper macro for the nested loops
+#define VORONOI_LOOPS_2D for (int y = -1; y <= 1; y++) { \
+                         for (int x = -1; x <= 1; x++)
 
-    vec2 m = vec2(8.0);
-    for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-            vec2 g = vec2(float(i), float(j));
-            vec2 o = vec2(noise_rand(n + g));
-            vec2 r = g + o - f;
-            float d = dot(r, r);
-            if (d < m.x) {
-                m.y = m.x;
-                m.x = d;
-            } else if (d < m.y) {
-                m.y = d;
-            }
-        }
-    }
-    return sqrt(m);
+#define VORONOI_LOOPS_3D for (int z = -1; z <= 1; z++) { \
+                         for (int y = -1; y <= 1; y++) { \
+                         for (int x = -1; x <= 1; x++)
+
+#define VORONOI_LOOPS_4D for (int w = -1; w <= 1; w++) { \
+                         for (int z = -1; z <= 1; z++) { \
+                         for (int y = -1; y <= 1; y++) { \
+                         for (int x = -1; x <= 1; x++)
+
+#define VORONOI_LOOPS_END(dim) } // Repeated dim times
+
+// Main Voronoi function macro
+#define NOISE_VORONOI(vec_type, dim) \
+vec2 noise_voronoi(vec_type p) { \
+    vec_type i = floor(p); \
+    vec_type f = fract(p); \
+    \
+    float minDist = 1.0; \
+    float secondMinDist = 1.0; \
+    \
+    VORONOI_LOOPS_##dim { \
+        vec_type neighbor = vec_type(float(x), float(y) VORONOI_EXTRA_COORDS_##dim); \
+        vec_type point = neighbor + vec_type(noise_rand(i + neighbor)); \
+        vec_type diff = neighbor + point - f; \
+        float dist = length(diff); \
+        \
+        if (dist < minDist) { \
+            secondMinDist = minDist; \
+            minDist = dist; \
+        } else if (dist < secondMinDist) { \
+            secondMinDist = dist; \
+        } \
+    } VORONOI_LOOPS_END(dim) \
+    \
+    return vec2(minDist, secondMinDist); \
 }
 
-// Voronoi noise function for 3D
-vec2 noise_voronoi(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
+// Helper macros for extra coordinates
+#define VORONOI_EXTRA_COORDS_2D
+#define VORONOI_EXTRA_COORDS_3D , float(z)
+#define VORONOI_EXTRA_COORDS_4D , float(z), float(w)
 
-    float min_dist = 1.0;
-    vec3 nearest_point = vec3(0.0);
+// Generate the functions
+NOISE_VORONOI(vec2, 2D)
+NOISE_VORONOI(vec3, 3D)
+NOISE_VORONOI(vec4, 4D)
 
-    for (float x = -1.0; x <= 1.0; x++) {
-        for (float y = -1.0; y <= 1.0; y++) {
-            for (float z = -1.0; z <= 1.0; z++) {
-                vec3 neighbor = i + vec3(x, y, z);
-                vec3 diff = neighbor - f;
-                float dist = length(diff);
-                if (dist < min_dist) {
-                    min_dist = dist;
-                    nearest_point = neighbor;
-                }
-            }
-        }
-    }
-
-    return vec2(min_dist, length(nearest_point - f));
+#define NOISE_VORONOI_PARAMETERIZED(vec_type, dim) \
+vec2 noise_voronoi(vec_type p, VoronoiParams params) { \
+    p /= params.cellSize; \
+    vec_type i = floor(p); \
+    vec_type f = fract(p); \
+    \
+    float minDist = 1.0; \
+    float secondMinDist = 1.0; \
+    \
+    VORONOI_LOOPS_##dim { \
+        vec_type neighbor = vec_type(float(x), float(y) VORONOI_EXTRA_COORDS_##dim); \
+        vec_type point = neighbor + vec_type(noise_rand(i + neighbor)) * params.jitter; \
+        vec_type diff = neighbor + point - f; \
+        \
+        float dist = math_distance(diff, params.metric); \
+        if(params.metric == 0) dist = sqrt(dist); \
+        \
+        if (dist < minDist) { \
+            secondMinDist = minDist; \
+            minDist = dist; \
+        } else if (dist < secondMinDist) { \
+            secondMinDist = dist; \
+        } \
+    } VORONOI_LOOPS_END(dim) \
+    \
+    vec2 distances = vec2(minDist, secondMinDist); \
+    float borderFactor = smoothstep(0.0, params.borderWidth, distances.y - distances.x); \
+    \
+    if(params.invertOutput) { \
+        distances = vec2(1.0) - distances; \
+    } \
+    \
+    return mix(distances, vec2(0.0), borderFactor); \
 }
 
-// Voronoi noise function for 4D
-vec2 noise_voronoi(vec4 p) {
-    vec4 i = floor(p);
-    vec4 f = fract(p);
-
-    float min_dist = 1.0;
-    vec4 nearest_point = vec4(0.0);
-
-    for (float x = -1.0; x <= 1.0; x++) {
-        for (float y = -1.0; y <= 1.0; y++) {
-            for (float z = -1.0; z <= 1.0; z++) {
-                for (float w = -1.0; w <= 1.0; w++) {
-                    vec4 neighbor = i + vec4(x, y, z, w);
-                    vec4 diff = neighbor - f;
-                    float dist = length(diff);
-                    if (dist < min_dist) {
-                        min_dist = dist;
-                        nearest_point = neighbor;
-                    }
-                }
-            }
-        }
-    }
-
-    return vec2(min_dist, length(nearest_point - f));
-}
+// Generate the parameterized functions
+NOISE_VORONOI_PARAMETERIZED(vec2, 2D)
+NOISE_VORONOI_PARAMETERIZED(vec3, 3D)
+NOISE_VORONOI_PARAMETERIZED(vec4, 4D)
 
 #endif

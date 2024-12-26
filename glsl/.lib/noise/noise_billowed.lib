@@ -1,7 +1,7 @@
 #ifndef LIB_NOISE_BILLOWED
 #define LIB_NOISE_BILLOWED
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 
 //------------------------------------------------------------------------------
 // BILLOWED NOISE
@@ -9,7 +9,7 @@
 
 // Billowed noise (absolute value of Perlin)
 float noise_billowed(vec2 p) {
-    return abs(noise_perlin(p * 2.0) * 2.0 - 1.0);
+    return abs(noise_simplex(p * 2.0) * 2.0 - 1.0);
 }
 
 #endif

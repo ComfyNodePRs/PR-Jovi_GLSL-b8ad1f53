@@ -2,7 +2,7 @@
 #define LIB_NOISE_SPACE_NEBULA
 
 #include .lib/noise/noise_fbm.lib
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
 
 //------------------------------------------------------------------------------
 // SPACE NOISE
@@ -11,7 +11,7 @@
 // Nebula-like noise
 float noise_nebula(vec2 p, float scale, float detail) {
     float base = noise_fbm(p * scale, 0.5, 6);
-    float fine = noise_perlin(p * scale * detail);
+    float fine = noise_simplex(p * scale * detail);
     return base * fine;
 }
 

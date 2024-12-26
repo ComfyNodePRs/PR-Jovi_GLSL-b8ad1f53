@@ -1,34 +1,63 @@
 #ifndef LIB_NOISE_WARP
 #define LIB_NOISE_WARP
 
-#include .lib/noise/noise_perlin.lib
+#include .lib/noise/noise_simplex.lib
+#include .lib/noise/noise_params.lib
 
 //------------------------------------------------------------------------------
 // DOMAIN WARPING
+// Distorts the input space for flowing, organic patterns
 //------------------------------------------------------------------------------
 
-float noise_warp(vec2 p, float strength) {
+float noise_warp(vec2 p, NoiseParams params) {
+
     vec2 q = vec2(
-        noise_perlin(p + vec2(0.0, 0.0)),
-        noise_perlin(p + vec2(5.2, 1.3))
+        noise_simplex(p + vec2(0.0, 0.0), params),
+        noise_simplex(p + vec2(5.2, 1.3), params)
     );
 
     vec2 r = vec2(
-        noise_perlin(p + strength * q + vec2(1.7, 9.2)),
-        noise_perlin(p + strength * q + vec2(8.3, 2.8))
+        noise_simplex(p + strength * q + vec2(1.7, 9.2), params),
+        noise_simplex(p + strength * q + vec2(8.3, 2.8), params)
     );
 
-    return noise_perlin(p + strength * r);
+    return noise_simplex(p + params.amplitude * r, params);
 }
 
-vec3 noise_warp3D(vec3 p, float strength) {
+vec3 noise_warp(vec3 p, NoiseParams params) {
+
     vec3 q = vec3(
-        noise_perlin(vec3(p.x, p.y, p.z)),
-        noise_perlin(vec3(p.x + 5.2, p.y + 1.3, p.z + 2.1)),
-        noise_perlin(vec3(p.x + 1.7, p.y + 9.2, p.z + 3.5))
+        noise_simplex(vec3(p.x, p.y, p.z), params),
+        noise_simplex(vec3(p.x + 5.2, p.y + 1.3, p.z + 2.1), params),
+        noise_simplex(vec3(p.x + 1.7, p.y + 9.2, p.z + 3.5), params)
     );
 
-    return q * strength;
+    vec3 r = vec3(
+        noise_simplex(p + strength * q + vec3(1.7, 9.2, 4.6), params),
+        noise_simplex(p + strength * q + vec3(8.3, 2.8, 7.1), params),
+        noise_simplex(p + strength * q + vec3(6.2, 5.4, 3.8), params)
+    );
+
+    return p + params.amplitude * r;
+}
+
+vec4 noise_warp(vec4 p, NoiseParams params) {
+
+    vec4 q = vec4(
+        noise_simplex(vec4(p.x, p.y, p.z, p.w), params),
+        noise_simplex(vec4(p.x + 5.2, p.y + 1.3, p.z + 2.1, p.w + 3.4), params),
+        noise_simplex(vec4(p.x + 1.7, p.y + 9.2, p.z + 3.5, p.w + 2.8), params),
+        noise_simplex(vec4(p.x + 4.3, p.y + 2.6, p.z + 8.1, p.w + 5.7), params)
+    );
+
+    vec4 r = vec4(
+        noise_simplex(p + strength * q + vec4(1.7, 9.2, 4.6, 2.3), params),
+        noise_simplex(p + strength * q + vec4(8.3, 2.8, 7.1, 5.9), params),
+        noise_simplex(p + strength * q + vec4(6.2, 5.4, 3.8, 9.1), params),
+        noise_simplex(p + strength * q + vec4(3.9, 7.2, 8.4, 4.5), params)
+    );
+
+    return p + params.amplitude * r;
 }
 
 #endif

@@ -6,16 +6,13 @@
 // Core gradient calculation functions used by noise algorithms
 //------------------------------------------------------------------------------
 
-vec2 noise_grad(vec2 g, vec2 p) {
-    return g * (2.0 * p - 1.0);
+#define GRAD(vec_type) vec_type noise_grad(vec_type g, vec_type p) { \
+    return g * (2.0 * p - 1.0); \
 }
 
-vec3 noise_grad(vec3 g, vec3 p) {
-    return g * (2.0 * p - 1.0);
-}
-
-vec4 noise_grad(vec4 g, vec4 p) {
-    return g * (2.0 * p - 1.0);
-}
+GRAD(float)
+GRAD(vec2)
+GRAD(vec3)
+GRAD(vec4)
 
 #endif

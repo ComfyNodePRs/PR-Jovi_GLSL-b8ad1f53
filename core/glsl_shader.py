@@ -176,6 +176,7 @@ class GLSLShader:
             logger.debug("user uniforms initialized")
         except Exception as e:
             self.__cleanup()
+            logger.debug(fragment_raw)
             raise CompileException(f"shader compilation failed: {str(e)}")
 
     def __cleanup(self):

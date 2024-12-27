@@ -1,42 +1,26 @@
+<div align="center">
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Amorano/Jovimetrix-examples/blob/master/res/logo-jovimetrix.png">
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/Amorano/Jovimetrix-examples/blob/master/res/logo-jovimetrix-light.png">
-  <img alt="ComfyUI Nodes for creating GLSL shaders">
+  <source srcset="https://github.com/Amorano/Jovimetrix-examples/blob/master/res/jovi_glsl.png">
+  <img alt="ComfyUI Nodes for creating GLSL shaders" width="256" height="256">
 </picture>
 
-<h2><div align="center">
+</div>
+
+<div align="center">
+
 <a href="https://github.com/comfyanonymous/ComfyUI">COMFYUI</a> Nodes for creating GLSL shaders
-</div></h2>
 
-<h3><div align="center">
-JOVI_GLSL IS ONLY GUARANTEED TO SUPPORT <a href="https://github.com/comfyanonymous/ComfyUI">COMFYUI 0.3.7+</a> and <a href="https://github.com/Comfy-Org/ComfyUI_frontend">FRONTEND 1.6.2+</a><br>
-IF YOU NEED AN OLDER VERSION, PLEASE DO NOT UPDATE.
-</div></h3>
+</div>
 
-<h2><div align="center">
+<div align="center">
 
 ![KNIVES!](https://badgen.net/github/open-issues/Amorano/JOVI_GLSL)
 ![FORKS!](https://badgen.net/github/forks/Amorano/JOVI_GLSL)
 
-</div></h2>
+</div>
 
 <!---------------------------------------------------------------------------->
-
-# SPONSORSHIP
-
-Please consider sponsoring me if you enjoy the results of my work, code or documentation or otherwise. A good way to keep code development open and free is through sponsorship.
-
-<div align="center">
-
-[![BE A GITHUB SPONSOR ❤️](https://img.shields.io/badge/sponsor-30363D?style=for-the-badge&logo=GitHub-Sponsors&logoColor=#EA4AAA)](https://github.com/sponsors/Amorano)
-
-[![DIRECTLY SUPPORT ME VIA PAYPAL](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/onarom)
-
-[![PATREON SUPPORTER](https://img.shields.io/badge/Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/joviex)
-
-[![SUPPORT ME ON KO-FI!](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/alexandermorano)
-
-</div>
 
 ## HIGHLIGHTS
 
@@ -73,6 +57,27 @@ If you are using a <code>virtual environment</code> (<code><i>venv</i></code>), 
 ```
 pip install -r .\ComfyUI\custom_nodes\Jovi_GLSL\requirements.txt
 ```
+
+<!---------------------------------------------------------------------------->
+
+# SPONSORSHIP
+
+Please consider sponsoring me if you enjoy the results of my work, code or documentation or otherwise. A good way to keep code development open and free is through sponsorship.
+
+<div align="center">
+
+[![BE A GITHUB SPONSOR ❤️](https://img.shields.io/badge/sponsor-30363D?style=for-the-badge&logo=GitHub-Sponsors&logoColor=#EA4AAA)](https://github.com/sponsors/Amorano)
+
+[![DIRECTLY SUPPORT ME VIA PAYPAL](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/onarom)
+
+[![PATREON SUPPORTER](https://img.shields.io/badge/Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/joviex)
+
+[![SUPPORT ME ON KO-FI!](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/alexandermorano)
+
+</div>
+
+<!---------------------------------------------------------------------------->
+
 # WHERE TO FIND ME
 
 You can find me on [![DISCORD](https://dcbadge.vercel.app/api/server/62TJaZ3Z5r?style=flat-square)](https://discord.gg/62TJaZ3Z5r).
